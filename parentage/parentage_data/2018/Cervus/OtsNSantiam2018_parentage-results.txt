@@ -1,0 +1,112 @@
+Cervus 3.0.7 - (c) Copyright Tristan Marshall 1998-2014
+Distributed by Field Genetics Ltd - www.fieldgenetics.com
+Licensed for non-commercial use only
+
+Parentage analysis completed 7/29/2020 8:28:57 AM
+
+
+**** Summary statistics ****
+
+
+Mother alone:
+
+Level       Confidence (%)  Critical LOD    Assignments        Assignment Rate  
+                                            Observed Expected  Observed Expected
+Strict               95.00           -1.50      225 (    246)      90%    ( 98%)
+Relaxed              80.00         -999.00      250 (    251)     100%    (100%)
+Unassigned                                        1 (      0)       0%    (  0%)
+Total                                           251 (    251)     100%    (100%)
+
+Father alone:
+
+Level       Confidence (%)  Critical LOD    Assignments        Assignment Rate  
+                                            Observed Expected  Observed Expected
+Strict               95.00           -0.50      217 (    246)      86%    ( 98%)
+Relaxed              80.00         -999.00      251 (    251)     100%    (100%)
+Unassigned                                        0 (      0)       0%    (  0%)
+Total                                           251 (    251)     100%    (100%)
+
+Parent pair (sexes known):
+
+Level       Confidence (%)  Critical LOD    Assignments        Assignment Rate  
+                                            Observed Expected  Observed Expected
+Strict               95.00           10.00      150 (    233)      60%    ( 93%)
+Relaxed              80.00         -999.00      250 (    251)     100%    (100%)
+Unassigned                                        1 (      0)       0%    (  0%)
+Total                                           251 (    251)     100%    (100%)
+
+
+**** Number of individuals tested ****
+
+Offspring (total):                                           251
+  Tested (typed at 7 or more loci):                          251
+  Not tested (typed at fewer than 7 loci):                     0
+
+Candidate mothers (total):                                  2015
+  Tested (typed at 7 or more loci):                         2015
+  Not tested (typed at fewer than 7 loci):                     0
+  Average number of candidate mothers per offspring:        2015
+  Average proportion of sampled candidate mothers:             1.0000
+
+Candidate fathers (total):                                  2998
+  Tested (typed at 7 or more loci):                         2998
+  Not tested (typed at fewer than 7 loci):                     0
+  Average number of candidate fathers per offspring:        2998
+  Average proportion of sampled candidate fathers:             1.0000
+
+Average candidate parent pairs per offspring:            6040970
+
+
+**** Files ****
+
+Input
+  Offspring file:                 OtsNSantiam2018assignment-offspring.txt
+  Candidate mother file:          OtsNSantiam2018assignment-moms.txt
+  Candidate father file:          OtsNSantiam2018assignment-dads.txt
+  Genotype file:                  OtsNSantiam2018assignment-allgenotypes.txt
+  Allele frequency file:          allele_freq.alf
+  Simulation data file:           sim_summary.sim
+
+Output
+  Parentage summary file:         OtsNSantiam2018_parentage-results.txt
+  Parentage data file:            OtsNSantiam2018_parentage-results.csv
+
+
+**** Loci ****
+
+       1  Ot21
+       2  OtG40
+       3  Ot21
+       4  Ot51
+       5  Ot20
+       6  Ogo
+       7  Ssa40
+       8  OtG24
+       9  Ot21
+      10  OtG47
+      11  Ogo
+      12  OtG31
+
+
+**** Simulation parameters ****
+
+Input
+  Number of offspring:                                       251
+  Number of candidate mothers:                              2015
+  Proportion of candidate mothers sampled:                     0.9500
+  Number of candidate fathers:                              2998
+  Proportion of candidate fathers sampled:                     0.9500
+    Number of parent pairs:                              6040970
+
+  Proportion of loci typed:                                    1.00000000
+  Proportion of loci mistyped:                                 0.01000000
+  Error rate in likelihood calculations:                       0.01000000
+  Minimum number of typed loci:                                7
+
+Output
+  Confidence determined using:                               LOD
+  Relaxed confidence level:                                   80.00%
+  Strict confidence level:                                    95.00%
+
+
+********************************************************************************
