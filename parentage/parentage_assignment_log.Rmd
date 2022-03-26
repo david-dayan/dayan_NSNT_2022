@@ -1,0 +1,198 @@
+---
+title: "Parentage Assignment Log"
+output:
+  html_document:
+    df_print: paged
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_collapsed: false
+---
+
+```{r, message = FALSE, warning=FALSE}
+require(kableExtra)
+require(gt)
+require(gtsummary)
+require(tidyverse)
+require(magrittr)
+```
+
+
+# Summary
+
+This notebook contains a log of all work to create the final pedigree for the 2022 North Santiam Chinook salmon genetic pedigree study.
+
+For each offspring year, assign parentage using two programs: _Cervus_ and _Colony_. Then create a consensus pedigree between the two programs. Finally, combine offspring years into a final pedigree used for downstream analysis.
+
+This is an R notebook. The .html version of this file is a fully rendered and interactive log. To view it, save the html and open in a browse. The .rmd version can be opened within R studio. To reproduce results or edit the analysis: clone the full repository onto tyour local machine and open the r project in rstudio. This will provide all needed data and objects. 
+
+# Rationale
+
+I (Dayan) could not successfully reproduce previous years assignment results. The previous worker (Bohn) attempted to exactly reproduce the approach taken by the worker before them (Black), but there was no way to consistently reproduce results given unspecified aspects of the assignment criteria and the reliance of manual assignments. Additionally, some possibly underappreciated effects of previous assignment criteria could lead to internannual biases in assignment rates that reduce our confidence to relate year-year changes in fitness of outplanted and reintroduced salmon to changes in environmental conditions or management practices.
+
+To solve both reproducibility problems and interannual biases, I chose to reassign all offspring from 2016 - 2020 using new assignment criteria. I also reassigned 2014 and 2015 offspring to 2011 and 2012 parents, as these parent years were salient to the report, but note that these offspring years are not assigned to all possible parents.
+
+I attempted to preserve as much work as possible and draft new assignment criteria as close as possible to previously published approaches from either this system (North Santiam) or other Upper Willamette River Chinook Salmon pedigree projects (McKenzie River). All individuals and their genotypes used by Bohn are retained in this new analysis.
+
+# Data Summary
+
+Input data is available in the directory "parentage_data"  
+
+- This directory contains inputs and outputs for/from Cervus and Colony  
+- Subdirectories are organized by offspring year, each subdirectory contains:  
+    - all data required to run Cervus and Colony for a given offspring year  
+    - unprocessed outputs from Cervus and Colony for a given offspring year  
+    - processed Cervus and Colony pedigrees for a given offspring year  
+    - final consensus pedigree for a given offspring year  
+    - note that the same parents occur can occur across multiple offspring years, so all information for a given parent may be spread across multiple subdirectories  
+- Input sets of parents and offspring (except for 2020) are almost exactly the same as those from Bohn, but the files and their contents might differ slightly:  
+    - 2020 uses new data, so there is no corresponding input/output data from Bohn  
+    - sample names have been unified (see [Prepare Input Data])  
+    - offspring sample names gave precedence to carcass samples over live samples if they were likely duplicates in a previous approach, but Bohn and Kathleen decided that live samples should be given precedence. to save time, Bohn just changed the numbers AFTER THE FACT in the results, creating a bit of nightmare for replication. to avoid this problem, I changed offspring in the input files to reflect giving precendence to live samples over carcass samples when they seemingly from the same fish (see appendix b from Bohn's assigment criteria). The end result is the same individuals and sample sizes per group as Bohn's approach, but implemented from the beginning  
+    - a small number of Bohn's input files did not reflect what was in the report (perhaps ad hoc editing of results to make changes without redoing analyses), went with the report numbers for my new runs
+- Input parameters (colony.DAT files, cervus .crv files, logs) are different from those found in Bohn's directories and reflect the actual runs    
+
+
+# Prepare Input Data
+
+## Rationale
+
+Bohn's files for 2016 - 2019 are ready to use for _Cervus_ and _Colony_, but there is no unified sample naming scheme across years. For example the same individual is named "NS-OP_12_0011" and "NS_12_OP_HOR_M_0011" in the input files for 2017 and 2016 respectively. 
+
+This will wreak havoc with downstream analyses, because there will be no way to readily unify results across offspring years, a step critical for calculation of any statistic calculated for parents, such as total lifetime fitness. 
+
+In this section of the notebook we will change the input files to use a single naming scheme. 
+
+## Log
+
+Changing input file names in situ was going to be very time consuming nearly each year (and often sex within a year) used a different naming scheme for the same individuals. Instead, I concatenated all of the "final" genotype files into a single dataset, confirmed samples sizes per group using table 3 from the draft report and then reconstructed datasets manually (in excel). I also took the opportunity to unify metadata into a single document. Because each individual only appears once in this dataset, slicing it to create the inputs for cervus and colony solved the naming convention problem.
+
+The document is available at "project_repo/parentage/parentage_data/full_dataset.xlsx"
+
+## Standardize Metadata Format
+
+ODFW/USACE metadata is not standardized. As a consequence, the values used can vary from year to year (e.g. sex is indicated as M, F, male, and female). In the code chunks below, we standardize this data. 
+
+__check data__
+First, let's check that we correctly imported this dataset and compare sample sizes against the draft report.
+```{r standardize_metadata, message=FALSE, warning=FALSE}
+full_dataset <- readxl::read_xlsx("parentage_data/full_dataset.xlsx", sheet = 1, col_types = "text")
+
+tbl_summary(select(full_dataset, type, year), by = type) %>%
+  modify_header(label ~ "") %>%
+  modify_spanning_header(c("stat_1", "stat_2", "stat_3", "stat_4", "stat_5","stat_6","stat_7") ~ "**type**") %>%
+  as_kable_extra() %>%
+  kable_classic(full_width = F, html_font = "Arial")# %>%
+```
+
+__All looks good here.__ There are only two differences between this table and the draft report:  
+(1) New data in 2017 and 2020 added here.  
+(2) In 2015 table 3 from the draft report contained an error. Two individuals with no sex information were included in the table, but not considered as possible information in the previous analysis (or this one). I think they got in here by quickly summing up one of Bohn's concatenated genotype table by category, where they were not filtered out to reflect what was done in the analysis.  
+
+Now, let's start standardizing these values.
+
+```{r get_values_to_fix, eval = FALSE}
+ full_dataset %>%
+  count(geno_sex)
+
+ full_dataset %>%
+  count(date)
+ 
+full_dataset %>%
+  filter(type == "outplant") %>%
+  count(location)
+#not too bad to fix, but what about those NAs? do we really not have a release location for some years?
+full_dataset %>%
+  filter(type == "outplant") %>%
+  filter(is.na(location)) %>%
+  count(type, year)
+# no, we do know, for 149 of 159 missing values, we'll repair these in the data manually, then run ths again. the remaining 10 are truly unknown.
+ 
+full_dataset %>%
+  count(origin)
+
+# note here that there are two individuals with no sex info in the new dataset, I removed them to be consistent with previous work
+```
+
+```{r, message=FALSE, warning=FALSE}
+# now let's fix all but date
+full_dataset %<>%
+  mutate(origin = case_when(origin %in% c("N", "NOR", "Unclipped") ~ "NOR",
+                            origin %in% c("Clipped", "HOR", "Y") ~ "HOR",
+                            TRUE ~ NA_character_))
+
+# checked here
+
+full_dataset %<>%
+  mutate(location = str_to_lower(location)) %>%
+  mutate(location = case_when(location == "breitenbush" ~ "breitenbush river",
+                              location == "mainstem/breitenbush" ~ "breitenbush river",
+                              TRUE ~ location))
+# checked here
+
+full_dataset %<>%
+  mutate(geno_sex = case_when(geno_sex == "Female" ~ "F",
+                              geno_sex == "Male" ~ "M", 
+                              TRUE ~ geno_sex))
+  
+```
+
+Now to tackle date...
+There are a couple issues, the first is that excel saves dates as integers and I didn't tell readxl to read these in as dates. Let's solve that by creating a new dataset to work with.
+
+```{r, message=FALSE, warning=FALSE}
+dates <- read_tsv("parentage_data/dates.txt")
+dates %<>%
+  mutate(date = lubridate::mdy(date))
+
+full_dataset %<>%
+  select(-date) %>%
+  left_join(dates, by = c("sample_id" = "sample_id")) %>%
+  relocate(date)
+
+```
+
+Excellent, this looks good and we're ready to make some assignments.
+
+# Cervus Log
+
+Actual Cervus run parameters are available for each run using the .crv file in the respective offspring year sub-directory. In general, the following approah was used:  
+
+(1) Estimate allele frequencies using empirical data for each run (offspring year)  
+(2) Simulate parentage using empirical allele frequencies and empirical dam, sire and offspring sample sizes. Additionally:  
+    (a) 95% proportion parents sampled  
+    (b) 100% loci typed  
+    (c) 1% loci mistyped  
+    (d) Minimum 7 loci for comparison  
+    (e) LOD confidence  
+    (f) 80/95 confidence levels  
+
+# Colony Log
+
+Actual Cervus run parameters are available for each run using the .dat or "ProjectInformation.txt" files in the respective offspring year sub-directory. In general, the following approah was used:  
+
+>MATING SYSTEM: MALE/FEMALE POLYGAMY  
+MATING SYSTEM II: WITHOUT INBREEDING [default]  
+SPECIES: DIOECIOUS, DIPLOID [default]  
+LENGTH OF RUN: MEDIUM  
+ANALYSIS METHOD: FL-PLS COMBINED (FPLS)  
+LIKELIHOOD PRECISION: MEDIUM [default]  
+RUN SPECIFICATIONS: NO UPDATE ALLELE FREQUENCY, NO SIBSHIP SCALING, 1 RUN, 1234 RANDOM NUMBER SEED  
+SIBSHIP PRIOR: NO PRIOR  
+NUMBER OF LOCI: 12  
+MARKER TYPES AND ERROR RATES: UPLOAD FILE "MarkerTypeErrorRate-Chinook North Santiam usats"  
+ALLELE FREQUENCY: UNKNOWN  
+Chance of Sampling a Parent: 95%  
+Known Sibs, Excluded Parents etc: 0  
+
+# Assignment Criteria Summary
+
+# Assignment
+
+## Colony Assignment  
+
+## Cervus Assignment  
+
+## Consensus Assignment 
+
+
