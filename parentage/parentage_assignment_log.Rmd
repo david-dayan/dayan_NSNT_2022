@@ -112,6 +112,8 @@ full_dataset %>%
   count(origin)
 
 # note here that there are two individuals with no sex info in the new dataset, I removed them to be consistent with previous work
+
+
 ```
 
 ```{r, message=FALSE, warning=FALSE}
@@ -152,6 +154,34 @@ full_dataset %<>%
 
 ```
 
+## Above/Below
+
+Whether a sample was outplanted/collected above or below Detroit dam is a piece of imformation we will use throughout assignment, but to keep nomenclature consistent with previous drafts, the "type" variable isn't always clear on this. For example reintro usually means above Minto (below Detroit), but in some years there are reintroductions above Detroit. Also carcass includes both carcasses collected above Detroit and below.
+
+Here I try to change the "type" variable into something that can both be used to filter easily by above and below, but retains the structure from the draft report. 
+
+```{r}
+#all outplants are above
+# all "reintro" is below
+# reintro above: aboce
+# reintro below: below
+# carcass: the fun one, checked all location names against map, all are below except the carcasses labeled as carcass_above, confirmed by Bohn labeled "carcass below" for nearly all sites. an exception is 2017, but these are confirmed below in other metadata
+
+# so we can just label the eceptions here and clean things up: reintros are always below except reintro_above, and carcasses are always below excecpt carcass_above
+
+full_dataset %<>%
+  mutate(type = case_when(type == "reintro_below" ~ "reintro",
+                          type == "carcass_below" ~ "carcass",
+                          TRUE ~ type))
+#let's add an above/below variable using this info now
+full_dataset %<>%
+  mutate(above_below = case_when(type %in% c("reintro", "carcass") ~ "below",
+                                 type %in% c("reintro_above", "carcass_above", "outplant") ~ "above"))
+
+```
+
+
+
 Excellent, this looks good and we're ready to make some assignments.
 
 # Cervus Log
@@ -159,13 +189,19 @@ Excellent, this looks good and we're ready to make some assignments.
 Actual Cervus run parameters are available for each run using the .crv file in the respective offspring year sub-directory. In general, the following approah was used:  
 
 (1) Estimate allele frequencies using empirical data for each run (offspring year)  
-(2) Simulate parentage using empirical allele frequencies and empirical dam, sire and offspring sample sizes. Additionally:  
+(2) Simulate parentage using empirical allele frequencies and empirical dam and sire sample sizes, 1000 offspring simulated. Additionally:  
     (a) 95% proportion parents sampled  
     (b) 100% loci typed  
     (c) 1% loci mistyped  
     (d) Minimum 7 loci for comparison  
     (e) LOD confidence  
     (f) 80/95 confidence levels  
+
+For years 2019 and 2020 the number of candidate parents was too large to run cervus (see note 5 in [Assignment Criteria Summary] below). To reduce the number of candidate parents in the final cervus run, first eliminated parents one sex at a time with greater than one mismatch with all offspring. Then used this filtered set of candidate parents to conduct a normal parentage analysis. Some notes on this:  
+
+(1) Used the full dataset allele frequency file for all runs.  
+(2) Conducted a new simulation file for each run (cutoffs depend on sample sizes) 
+(3) Each analysis in it's own subdirectory. The final datset used for analysis is in subdirectory "filtered_parents"
 
 # Colony Log
 
@@ -187,12 +223,357 @@ Known Sibs, Excluded Parents etc: 0
 
 # Assignment Criteria Summary
 
+__Proposed Approach__ (new colony and cervus runs, same input individuals and genotypes, new assignment criteria)  
+
+1.	Criteria below are always applied in the order presented here.  
+2.	Use Bohn’s input datafiles directly from colony and cervus (except for 2017 and 2020 which require new data).  
+3.	Run colony and cervus again using same version across all offspring years. 
+4.	Colony pedigree: 
+    a.	Mismatch Filtering (see note 2 though):  
+        i.	Remove any parent with >1 mismatch  
+        ii.	Remove any trios with >2 mismatches  
+    b. remove any impossible trios  
+        i.	Both parents must have returned in the same year    
+        ii.	Both parents must have been released either above Minto   (below Detroit) or above Detroit   
+        iii.	If one parent of a trio was collected as a carcass sample, recovery date must be after the release date of the other parent  
+5.	Cervus pedigree:  
+    a.	Use same parameters as before  
+    b.	Combine this dataset with metadata, then use to exclude impossible trios (see 4b above)  
+    d.	Trios (offspring and two parents): for each offspring choose best trio
+        i.	If there is at least one trio with (a) =<2 total mismatches, (b) each parent has =<1 mismatch, (c) significant LOD, then we will make a trio match for this offspring. If there is no trio that meets these criteria, then move on to attempt duo match below.
+        ii.	Best trio is chosen by total number of mismatches, ties are broken by LOD score.  
+    e.	Duos (offspring and single parent):  
+        i.	If no trio available for offspring, we attempt duo match.  
+        ii.	If there is a dam or sire with =<1 and significant LOD, we will make a duo assignment.   
+        iii.	Best duo is chosen by number of mismatches, ties are broken by LOD score.  
+6.	Consensus Pedigree – here we combine the colony and cervus results into the final pedigree used for later analysis  
+    a.	Disagreements are defined as any parent that does not agree between the two programs. This includes an assignment in one program and no assignment in the other.  
+    c.	If no disagreement, this is the final consensus assignment  
+    d.	if either program assigns a trio and disagree:  
+        i.	if both assign trio: choose best using total number of mismatches, colony assignment takes precedence in case of tie  
+        ii.	if only one trio assigned: this assignment takes precedence  
+    e.	if both programs assign duo and disagree:
+        i.	parent assignment with fewer mismatches takes precedence, ties go to colony  
+    f.	if only one program makes assignment:  
+        i.	keep assignment (assignment takes precedence to no assignment)
+
+
+
+Notes:
+
+1.	The previous approach (called Bohn here for short, but represents Bohn's attempts to best replicate Evans and Blacks approaches) conducted a single colony and cervus run for each offspring year. This is different than the approach taken by Sard, where each offspring year- parent year assignment is run separately in cervus, then the results are concatenated and assignment criteria applied to the concatenated result tables.
+
+Each approach presents issues. For the Bohn approach, combining all parents for a given offspring year into a single cervus/colony run means that impossible parentages are considered by colony and cervus. This biases CRR downwards, because good parentage assignments are excluded in favor of impossible assignments, which are subsequently filtered out.
+
+For the Nick approach, we reproduce this problem, despite running cervus separately for each offspring-year parent-year pair, because parents are picked one sex at a time using the concatenated dataset. We also introduce a new problem because ties are supposed to be broken by LOD but LOD is not comparable across runs.
+
+My proposed solution is to use the same input file structure as Bohn (which includes all parents for a given offspring year in a single run), but use a Nick-like approach for assignment criteria to improve reproducibility (apply a single algorithm applied in order without manual intervention or judgement calls). Therefore, a good opportunity to improve on both would be to first filter the Cervus output for impossible parent trios, then choose the best match on the basis of mismatches. Mismatch ties are broken by best LOD score. In this way LOD scores become comparable (solving the issue with Nick’s approach and permitting tie-breaking) and impossible parents are not favored over possible parents, biasing assignment rate downwards. 
+
+There is no way to take the same approach for colony. Colony allows for certian peaternities or maternaties to be excluded but not parent-pairs. Therefore Colony results will always have this bias. However, our approach to the consensus pedigree means that if an offspring's parentage is excluded because of impossible parentage in colony, we will maintain any Cervus parentage, reducing the possible downward bias of assignment rates due to this issue with the Colony parentage. 
+
+2.	Everyone who worked on these projects previously seems to have only output the trios with positive LOD score from Cervus. This seems to be motivated by the massive file size (1 line per each offspring x father x mother combo – files sizes >300gb are common), but this creates a major problem: Cervus only permits filtering the output file by the TRIO LOD score, but everyone has been interested in making single parent assignments if no good trio is available. As a consequence, the true best single parent in cervus (according to number of mismatches or highest LOD score), may not appear in the output, because there is no trio with a positive LOD that includes this parent. This means we don’t have the all the information we need to apply the rules we claim to apply without resorting to manual matching for every single possible parent. In other words, previous methods sections statements such as “we chose the parent with the fewest mismatches” are potentially misleading, because we don’t actually have this information on hand. Among others, this may have been previous workers’ motivation for trusting colony assignments over cervus assignments.
+
+Bohns’s approach takes a slightly different tact than others (possibly to solve this problem) but creates a potential time sink here and the opportunity to issues with manual assignment: when there are colony-cervus disagreements, Sandra’s criteria demand you break the tie with mismatch numbers, but these are theoretically unavailable in the output for the reasons stated above. So you wind up having to pull the raw data and make the assignment using “visual checks.” 
+
+A possible solution here is to output the massive file, then make it more manageable by filtering for a positive LOD score for EITHER a dam or sire using something fast and capable of handling large text files like awk. In a test case, this approach reduced file size to <1%, making it manageable to manipulate in R, excel or elsewhere. I will attempt to output the full file using all parent-parent pairs in cervus.
+
+Update – my desired approach (print the entire cervus output to file) is unmanageable with the equipment and time frame that I have. Output files get up to the terabyte range. It could be done with a cervus install on the server, but this would be very time consuming because cervus is windows dependent and would require setting up a virtual machine and a lot of other work.
+
+Instead, to evaluated how severe a problem the filtered output represents. I checked if there was ever a case where colony made an assignment to a parent that didn’t have mismatch data. It never happened for the 251 offspring in 2018 despite many single parent assignments. This suggests that a single good parent is usually enough to push trio LOD above 0 for at least one row in the cervus output. So, the problem still exists (we may not have all the information to select the true best single parent), but it is likely uncommon enough that we should probably move on to bigger issues.  
+
+Update 2 - While this problem doesn't occur in 2018, it does occur in other years. In 2016 for example, there are 10 duos (single parent - offspring pairs) assigned by colony that do not appear in the cervus output. So we need to calculate differences another way.
+
+3.	For the consensus pedigree there are a few general ideas from previous papers we are trying to implement into specific criteria here.  
+  a.	Mismatches takes precedence to resolve disagreements 
+  b.	Colony has greater accuracy when unknown parents are possible (Harrison et al 2013). In our systems this is always a possibility, so ambiguous cases (disagreements where we have no additional criteria to evaluate) default to colony.  
+  c.	The power to make a correct assignment is greater for trios than duos (see non-exclusion probabilities in table s3 in Sard 2016, and elsewhere)   
+
+4.	Application of the ideas above (3) tend to result in increasing the number of assignments when generating a consensus pedigree relative to the pedigree produced by either colony or cervus. This is anti-conservative (biases CRR and fitness upwards). Ultimately there is no perfect way to make a consesus pedigree and we have no empirical information against which to optimize our approach. Instead we prioritize consistency across years.
+
+5. The data structures inside Cervus can't handle parent sample sizes in years 2018, 2019 and 2020 (personal communication Tristan Marshall - Cervus developer). Using the command line version gives aus a little more room, but not enough for 2020 which has ~800k possible parent pairs to consider for each offspring.   
+The recommended workaround is to reduce the number of parents in the analysis. The fastest/simplest way I've thought to do this without causing any downstream issues in interpreation or comparison across years is to first run a parentage analysis on each sex parent, then eliminate any parents we would not maintain in the final pedigree (e.g. no offspring in the dataset with <=1 mismatch). We can use this information to thin set of candidate parents then run the full parentage assignment.
+
 # Assignment
 
-## Colony Assignment  
+We make assignments in this section
+
+
 
 ## Cervus Assignment  
 
+In this section we import data from cervus, clean it up, and apply the assignment criteria to choose the best parentage.
+
+```{r, message=FALSE, warning=FALSE}
+#import raw cervus output
+cervus_2016 <- read_csv("parentage_data/2016/Cervus/2016_cervus_out.csv")
+
+# combine years
+cervus_raw <- bind_rows(cervus_2016)
+
+# clean up
+# cervus does not output machine-parseable, unique column names, instead it uses the index of the column to assign duplicate column names to either mother father or offspring, let's fix this, we'll also take the opportunity to unite names with the colony dataset 
+
+cervus_raw %<>%
+  rename(offspring_sample_id = "Offspring ID", 
+         offspring_loci_typed ="Loci typed", 
+         mother_sample_id = "Candidate mother ID", 
+         mother_loci_typed = "Loci typed_1",
+         mother_n_comp = "Pair loci compared",
+         mother_mm = "Pair loci mismatching",
+         mother_lod = "Pair LOD score",
+         mother_confidence = "Pair confidence",
+         father_sample_id = "Candidate father ID",
+         father_loci_typed = "Loci typed_2",
+         father_n_comp = "Pair loci compared_1",
+         father_mm = "Pair loci mismatching_1",
+         father_lod = "Pair LOD score_1" ,
+         father_confidence = "Pair confidence_1" ,
+         trio_n_comp = "Trio loci compared" ,
+         trio_mm = "Trio loci mismatching",
+         trio_lod = "Trio LOD score",
+         trio_confidence = "Trio confidence") %>%
+  select(-c("Pair top LOD","Pair top LOD_1" , "Trio top LOD"  ) ) # remove unused columns
+```
+
+```{r cervus meta_data}
+# combine with metadata
+
+#offspring
+cervus_full <- full_dataset %>%
+  select(sample_id, year, type, date) %>%
+  rename_with(.fn = ~ paste0("offspring_", .x)) %>%
+  right_join(cervus_raw, by = c("offspring_sample_id" = "offspring_sample_id"))
+
+#father
+cervus_full <- full_dataset %>%
+  select(sample_id, year, type, date, above_below) %>%
+  rename_with(.fn = ~ paste0("father_", .x)) %>%
+  right_join(cervus_full, by = c("father_sample_id" = "father_sample_id"))
+
+#mother
+cervus_full <- full_dataset %>%
+  select(sample_id, year, type, date, above_below) %>%
+  rename_with(.fn = ~ paste0("mother_", .x)) %>%
+  right_join(cervus_full, by = c("mother_sample_id" = "mother_sample_id"))
+
+rm(cervus_raw)
+
+```
+
+```{r}
+
+# trios
+cervus_trios <- cervus_full %>%
+  filter(mother_mm <= 1 & father_mm <= 1 & trio_mm <= 2 & trio_confidence == "*") %>%    # get rows that meet good trio criteria
+  filter(father_year == mother_year) %>% # remove impossibles 
+  filter(father_above_below == mother_above_below) %>% # remove impossibles 
+  filter(! (str_starts(father_type, "carcass") & !(str_starts(mother_type, "carcass")) & father_date < mother_date)) %>% # remove impossibles 
+  filter(! (str_starts(mother_type, "carcass") & !(str_starts(father_type, "carcass")) & father_date > mother_date)) %>% # remove impossibles 
+  group_by(offspring_sample_id) %>% # get best row per offspring
+  slice_min(trio_mm) %>% # get best row per offspring
+  slice_max(trio_lod) # break ties by trio LOD
+  
+# duos
+# for duos the data structure is not "tidy:" we are choosing one parent at a time, yet each row does not represent one parent, but two. So to make things much easier, we will make the dataset a little longer (if not fully long), here each duo in the cervus output is made into its own row
+
+cervus_moms <- cervus_full %>%
+  select(-ends_with(c("date", "year", "type", "below"))) %>% #get rid of all the info used to filter impossible trios, don't need it anymore
+  select(offspring_sample_id, starts_with("mother")) %>% # now just get the mom info
+  rename_with(.fn = ~ str_remove(.x, "mother_"))
+
+cervus_dads <- cervus_full %>%
+  select(-ends_with(c("date", "year", "type", "below"))) %>% #get rid of all the info used to filter impossible trios, don't need it anymore
+  select(offspring_sample_id, starts_with("father")) %>% # now just get the mom info
+  rename_with(.fn = ~ str_remove(.x, "father_"))
+
+cervus_duos <- bind_rows(cervus_dads, cervus_moms, .id = "parent_sex")
+rm(cervus_dads, cervus_moms)
+
+cervus_duos %<>%
+  filter(!(offspring_sample_id %in% cervus_trios$offspring_sample_id)) %>% # remove offspring that already have assigned trios
+  distinct(.keep_all = TRUE) %>% # remove duplicated rows (same parent can appear across multiple rows in cervus output)
+  filter(mm <= 1 & confidence == "*") %>% # get duos that match criteria
+  group_by(offspring_sample_id) %>% # get the best for each offspring
+  slice_min(mm) %>%
+  slice_max(lod, with_ties = FALSE) %>%
+  select(offspring_sample_id, sample_id, parent_sex) %>% # now reassemble into the previous format
+  pivot_wider(id_cols = offspring_sample_id, names_from = parent_sex, values_from = sample_id) %>%
+  rename(mother_sample_id="2", father_sample_id = "1") 
+
+cervus_duos %<>%
+  left_join(distinct(select(cervus_full, starts_with("father"), offspring_sample_id)), by = c( "father_sample_id" = "father_sample_id" , "offspring_sample_id" = "offspring_sample_id")) %>%
+  left_join(distinct(select(cervus_full, starts_with("mother"), offspring_sample_id)), by = c( "mother_sample_id" = "mother_sample_id" , "offspring_sample_id" = "offspring_sample_id")) %>%
+  left_join(distinct(select(cervus_full, starts_with("offspring"))), by = c("offspring_sample_id" = "offspring_sample_id"))
+  
+### now combine into final cervus pedigree
+# let's get the info from unassigned offspring
+cervus_unassigned_offspring <- cervus_full %>%
+  filter(!(offspring_sample_id %in% cervus_trios$offspring_sample_id), !(offspring_sample_id %in% cervus_duos$offspring_sample_id)) %>%
+  select(starts_with("offspring")) %>%
+  distinct()
+
+cervus_final <- bind_rows(cervus_trios, cervus_duos, cervus_unassigned_offspring) %>%
+  relocate(offspring_sample_id, mother_sample_id, father_sample_id, starts_with("mother"), starts_with("father"), starts_with("trio"))
+
+
+# for the test year (2016) there were offspring with more than one qualifying trios, so we can't be sure this code is fully debugged until we add years, alternatively this may be an attribute of how trio LOD is calculated in cervus
+```
+
+## Colony Assignment  
+
+In this section we import data from colony, clean it up and filter out impossible parents.
+
+```{r import, message=FALSE, warning=FALSE}
+#import
+
+# colony exports data padded into pseudocolumns using different number of spaces, requires a smart importer, like read_table from readr
+
+colony_2016 <- read_table("parentage_data/2016/Colony/results/2016.BestConfig")
+
+#combine into single dataset
+full_colony_raw <- bind_rows(colony_2016)
+
+
+## lets add the metadata we'll need to filter later (year, type, date) for offspring and each parent
+#offspring
+full_colony <- full_dataset %>%
+  select(sample_id, year, type, date) %>%
+  rename_with(.fn = ~ paste0("offspring_", .x)) %>%
+  right_join(full_colony_raw, by = c("offspring_sample_id" = "OffspringID"))
+
+#father
+full_colony <- full_dataset %>%
+  select(sample_id, year, type, date, above_below) %>%
+  rename_with(.fn = ~ paste0("father_", .x)) %>%
+  right_join(full_colony, by = c("father_sample_id" = "FatherID"))
+
+#mother
+full_colony <- full_dataset %>%
+  select(sample_id, year, type, date, above_below) %>%
+  rename_with(.fn = ~ paste0("mother_", .x)) %>%
+  right_join(full_colony, by = c("mother_sample_id" = "MotherID"))
+
+rm(full_colony_raw)
+```
+
+```{r colony trios filter}
+## trios
+# filter trios for impossible parent pairs
+colony_trios <- full_colony %>%
+  filter(father_year == mother_year) %>%
+  filter(father_above_below == mother_above_below) %>%
+  filter(! (str_starts(father_type, "carcass") & !(str_starts(mother_type, "carcass")) & father_date < mother_date)) %>%
+  filter(! (str_starts(mother_type, "carcass") & !(str_starts(father_type, "carcass")) & father_date > mother_date))
+
+# filter trios for mismatches
+colony_trios %<>%
+  left_join(select(cervus_full, offspring_sample_id, mother_sample_id, father_sample_id, ends_with("mm")), by = c("offspring_sample_id" = "offspring_sample_id", "mother_sample_id" = "mother_sample_id", "father_sample_id" = "father_sample_id" )) %>%
+  filter(father_mm <= 1, mother_mm <=1, trio_mm <=2 ) 
+```
+
+```{r colony duos, cache = TRUE}
+## duos
+# get duos from output
+colony_duos <- full_colony %>%
+  filter(str_starts(mother_sample_id, "#") | str_starts( father_sample_id, "\\*")) %>%
+  filter(!(str_starts(mother_sample_id, "#") & str_starts( father_sample_id, "\\*"))) 
+# filter duos for mismatches
+# for duos the situation is much more challenging because the singleparents are often not in the cervus output (see note 2 from assignment criteria summary) and we need to count mismatches ourselves
+
+#get simplified genotype data
+long_genos <- full_dataset %>%
+  select(sample_id, starts_with(c("Ot", "Ssa", "Ogo"))) %>%
+  pivot_longer(-sample_id, names_to = "marker", names_pattern = "(.+)\\.\\.\\.")
+
+
+# debugging example data, do not use in final analysis
+long_genos_sample <- long_genos %>%
+  filter(sample_id %in% c("NS-OP_11_0014", "NS-OP_11_0015", "NS-OP_11_0016", "NS-OP_11_0018", "NS-OP_11_0020", "NS-OP_11_0024", "NS-OP_11_0025", "NS-OP_11_0026", "OtsAC16NSNT_1002", "NS-OP_12_0014"))
+comps_to_make <- data.frame(parent_id = c( "NS-OP_12_0014","NS-OP_11_0015"), offspring_sample_id = c("OtsAC16NSNT_1002", "NS-OP_11_0026"))
+mm_info <- matrix(ncol=3, nrow=nrow(comps_to_make))
+colnames(mm_info) <- c("parent_id","offspring_sample_id", "mm" )
+markers <- pull(distinct(long_genos_sample, marker))
+
+# actual data
+mm_info <- colony_duos %>%
+  mutate(mother_sample_id = case_when(str_starts(mother_sample_id, "#") ~ NA_character_,
+                                      TRUE ~ mother_sample_id),
+         father_sample_id = case_when(str_starts(father_sample_id, "\\*") ~ NA_character_,
+                                      TRUE ~ father_sample_id) ) %>%# turn unknown parents into NAs
+  select(offspring_sample_id, father_sample_id, mother_sample_id) %>%
+  mutate(parent_id = coalesce(father_sample_id, mother_sample_id)) %>% #combine parents into a single column
+  add_column(mm = NA) %>%
+  relocate(parent_id, offspring_sample_id, mm)  # relocate columns to format expected by mismatch calculator function
+
+
+
+for (i in (1:nrow(mm_info))){
+  match_marker = 0
+  for (m in markers){
+    match_marker = match_marker + (sum(pull(long_genos[long_genos$marker == m & long_genos$sample_id == as.character(mm_info[i,1]), 3] ) %in% pull(long_genos[long_genos$marker == m & long_genos$sample_id == as.character(mm_info[i,2]), 3] )) >=1)
+    #print(match_marker)
+  }
+  mismatch = 12-(match_marker)
+  #mm_info[i,1] <- as.character(comps_to_make[i,1]) #print parent to results matrix
+  #mm_info[i,2] <- as.character(comps_to_make[i,2]) #print offspring to results matrix
+  mm_info[i,3] <- mismatch# print number of mismatches
+}
+
+# now that we have mismatches, remove any duos with >1 mismatch
+colony_duos <- mm_info %>%
+  filter(mm <=1) %>%
+  select(offspring_sample_id, father_sample_id, mother_sample_id)
+
+
+## unassigned
+# collect unassigned info
+colony_unassign <- full_colony %>%
+  select(offspring_sample_id) %>%
+  filter(!(offspring_sample_id %in% c(colony_duos$offspring_sample_id, colony_trios$offspring_sample_id)))
+
+
+# combine filtered trios with duos
+colony_final <- bind_rows( select(colony_trios, offspring_sample_id, father_sample_id, mother_sample_id), colony_duos, colony_unassign)
+
+# here we should consider if we want to include NA rows for offspring with unassigned parents, will depend on our approach to consensus pedigree code, which is currently unwritten, to keep all just remove the last line of the duos code section
+```
+
+```{r, eval = FALSE}
+# let's check that the final colony pedigree matches expectation
+
+full_colony %>%
+  filter(! (offspring_sample_id %in% colony_final$offspring_sample_id)) %>%
+  View(.)
+
+#only cheked for 2016, but it worked perfectly in that year, come back and check again with the full dataset before finalizing assignments. 
+```
+
 ## Consensus Assignment 
+
+Disagreements are defined as any parent that does not agree between the two programs. This includes an assignment in one program and no assignment in the other.  
+    c.	If no disagreement, this is the final consensus assignment  
+    d.	if either program assigns a trio and disagree:  
+        i.	if both assign trio: choose best using total number of mismatches, colony assignment takes precedence in case of tie  
+        ii.	if only one trio assigned: this assignment takes precedence  
+    e.	if both programs assign duo and disagree:
+        i.	parent assignment with fewer mismatches takes precedence, ties go to colony  
+    f.	if only one program makes assignment:  
+        i.	keep assignment (assignment takes precedence to no assignment)
+
+```{r}
+## collect and simplify mm info for tie breaking
+#colony first
+colony_for_consensus <- select(mm_info, offspring_sample_id, colony_mother= mother_sample_id, colony_father = father_sample_id, colony_father_mm = mm, colony_mother_mm = mm) %>%
+  mutate(colony_father_mm = case_when(is.na(colony_father) ~ NA_real_,
+                               TRUE ~ colony_father_mm),
+         colony_mother_mm = case_when(is.na(colony_mother) ~ NA_real_,
+                               TRUE ~ colony_mother_mm)) %>%
+  bind_rows(select(colony_trios, offspring_sample_id, colony_father = father_sample_id, colony_father_mm = father_mm, colony_mother = mother_sample_id, colony_mother_mm = mother_mm, colony_trio_mm = trio_mm)) 
+
+#now cervus
+cervus_for_consensus <- 
+
+```
+
 
 
