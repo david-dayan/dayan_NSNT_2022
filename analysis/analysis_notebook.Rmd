@@ -67,13 +67,15 @@ pedigree_meta <- meta_data %>%
 
 ## Dataset Summary
 
+Here we summarize the metadata of salmon that are part of the final filtered dataset used as candidate parents and offspring.
+
 ```{r}
 
 tbl_summary(select(meta_data, type, year), by = type, percent = "row") %>%
   modify_header(label ~ "") %>%
   modify_spanning_header(c("stat_1", "stat_2", "stat_3", "stat_4", "stat_5") ~ "**type**") %>%
   as_kable_extra() %>%
-  kable_classic(full_width = F, html_font = "Arial")# %>%
+  kable_classic(full_width = F, html_font = "Cambria")# %>%
 ```
 The dataset described above includes all __sampled__ parents from 2011 - 2017 and all __sampled__ offspring from 2014 - 2020, after filtering for missingness and duplicates.
 
@@ -81,24 +83,28 @@ Note: Some of the results we work with in this report are properties of parents,
 For example: Fitness is a property of parents and we report fitness for parent years 2011-2015, so it requires information from additional offspring years that are not part of the range of years for which we report offspring level data (2014 and 2015).  
 As another example, while 2014 offspring are included in the pedigree, the complete set of their potential parents are not (2009, 2010). This is because we do not include results for parents years 2009 or 2010, but we do include 2011. Similarly 2017 parents are included in the study because they contribute as parents to 2020 offspring year, but we do not sample their potential age 4 and age 5 offspring, so we do not report full 2017 parent level results.
 
-### Table 2
-Let's summarise outplant release locations by location and date to present in table 2.
+### Releases
+
+Let's summarise outplant release locations by location and date to present in table 2. Only present 2016 and 2017 because table 2 already complete for 2011 - 2015
 
 ```{r}
 kable(meta_data %>%
   filter(above_below == "above") %>%
+    filter(year > 2015) %>%
   count(year, date, location), align = "c", caption = "Table 2 from draft report totals") %>%
-  kable_classic(full_width = F, html_font = "Arial")
+  kable_classic(full_width = F, html_font = "Cambria") 
 
 kable(meta_data %>%
   filter(above_below == "above", geno_sex == "F") %>%
+    filter(year > 2015) %>%
   count(year, date, location), align = "c", caption = "Table 2 from draft report females") %>%
-  kable_classic(full_width = F, html_font = "Arial")
+  kable_classic(full_width = F, html_font = "Cambria") 
 
 kable(meta_data %>%
   filter(above_below == "above", geno_sex == "M") %>%
+    filter(year > 2015) %>%
   count(year, date, location), align = "c", caption = "Table 2 from draft report males") %>%
-  kable_classic(full_width = F, html_font = "Arial")
+  kable_classic(full_width = F, html_font = "Cambria")
 
 ```
 
@@ -109,11 +115,11 @@ This section calculates number of assignments between different parent and offsp
 
 ## Table 3
 
-Here we format the assignment rates into the format of table 3 from the draft report
+Here we present the assignment rates into the format of table 3 from the draft report
 
-Each table in the notebook below can be used to recreate table 3. Each table represents a single pair of offspring and parent years. The type of offspring is listed in the first column and the results are split between parent types along the remaining columns (e.g. same format as table 4)
+Each table in the notebook below can be used to recreate table 3. Each table represents a single pair of offspring and parent years. The type of offspring is listed in the first column and the results are split between parent types along the remaining columns (e.g. same format as table 3)
 
-When the "type" of parent varies between two parents, the female parent type is listed first. This is slightly different from table 4. For example, if an offspring is assigned to a reintroduced mother and carcass father, the column would be called "reintro/carcass."
+When the "type" of parent varies between two parents, the female parent type is listed first. This is slightly different from table 3, so close attention is required when doing data entry here. For example, if an offspring is assigned to a reintroduced mother and carcass father, the column would be called "reintro/carcass."
 
 ```{r}
 # the format of the table is difficult to produce in r
@@ -144,7 +150,7 @@ t4_helper <- function(p_year, off_year){pedigree_meta %>%
   ) %>%
   modify_caption(paste(paste("parent year: ", p_year), paste("offspring year: ", off_year), sep = "  ,")) %>%
   as_kable_extra() %>%
-  kable_classic(full_width = F, html_font = "Arial")
+  kable_classic(full_width = F, html_font = "Cambria")
 }
 ```
 
@@ -186,7 +192,7 @@ t4_helper("2017", "2020")
 
 ## Age at Maturity
 
-We can also calculate age at maturity for offspring year using these data. These results appear in the draft report in the text, but we will summarise here in a table.
+We can also calculate age at maturity for offspring year using these data. These results appear in the draft report in the text, but we will summarise here in a table and a figure
 
 ```{r, message=FALSE, warning=FALSE}
 
@@ -206,6 +212,22 @@ kable(pedigree_meta %>%
   
   
 ```
+
+```{r, message=FALSE, warning=FALSE}
+aam_data <- pedigree_meta %>%
+        filter(!(offspring_year %in% c("2014", "2015"))) %>%
+  mutate(parent_year = (coalesce(father_year, mother_year))) %>%
+  filter(!(is.na(parent_year))) %>%
+  mutate(age = as.numeric(offspring_year) - as.numeric(parent_year)) %>%
+  group_by(offspring_year, age) %>%
+  summarise(n = n()) %>%
+  mutate(percent = 100*(n/sum(n)))
+
+ggplot(data = aam_data)+geom_bar(aes(x = offspring_year, color = as.factor(age), fill = as.factor(age), y = n), stat = "identity", position = "dodge")+scale_fill_viridis_d(name = "Age")+scale_colour_viridis_d(name = "Age")+theme_bw()+xlab("Offspring Year")+ggtitle("Age at Maturity")
+
+
+```
+
 
 
 # Total Lifetime Fitness
@@ -245,10 +267,11 @@ Here we format the TLF results to match table 4 of the draft report.
 ```{r, message=FALSE, warning=FALSE}
 kable(parents %>%
   group_by(year, type, geno_sex) %>%
-  summarise(N = n(), mean_tlf = mean(tlf), sd_tlf = sd(tlf), range = paste(min(tlf), " -  ", max(tlf))), align = "c") %>%
+  summarise(N = n(), mean_tlf = mean(tlf), sd_tlf = sd(tlf), range = paste(min(tlf), " -  ", max(tlf))), align = "c", caption = "Total Lifetime Fitness by Parent Group and Sex") %>%
   kable_classic(full_width = F, html_font = "Cambria") %>%
   kable_styling(fixed_thead = T) %>%
-  collapse_rows(columns = 1, valign = "top")
+  collapse_rows(columns = 1, valign = "top") %>%
+  scroll_box(height = "400px")
 
 
 ```
@@ -257,10 +280,10 @@ kable(parents %>%
 
 The results in text combine estimates of TLF across sexes. Let's generate the table above again, without splitting moms and dads.
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 kable(parents %>%
   group_by(year, type) %>%
-  summarise(N = n(), mean_tlf = mean(tlf), sd_tlf = sd(tlf), range = paste(min(tlf), " -  ", max(tlf))), align = "c") %>%
+  summarise(N = n(), mean_tlf = mean(tlf), sd_tlf = sd(tlf), range = paste(min(tlf), " -  ", max(tlf))), align = "c", caption = "Total Lifetime Fitness by Parent Group") %>%
   kable_classic(full_width = F, html_font = "Cambria") %>%
   kable_styling(fixed_thead = T) %>%
   collapse_rows(columns = 1, valign = "top")
@@ -316,13 +339,14 @@ kable(parents %>%
   group_by(year, type, geno_sex) %>%
   summarise(crr = sum(same_sex_offspring)/n()), align = "c", digits = 2) %>%
   kable_classic(full_width = F, html_font = "Cambria") %>%
-  kable_styling(fixed_thead = T) 
+  kable_styling(fixed_thead = T) %>%
+  scroll_box(height = "400px")
 # Let's check one of these to make sure the code is working correctly. In 2016, there were 452 male outplants. These 452 potential fathers appear in the final pedigree 1092 times. Of these 1092 offspring, 723 is male. Therefore the correct CRR for 2016 male outplants is 1.5995575. This matches the table.
 ```
 
 The results test also presents CRR not split by sex, but doesn't call it CRR or do the calculation (just presents the number of outplant parents and the number of offspring assigned to them). Let's calculate these below, so it is easier to write this results section. 
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 a <- pedigree_meta %>%
   mutate(parent_year = coalesce(mother_year, father_year)) %>%
   filter(father_type == "outplant" | mother_type == "outplant") %>% 
@@ -345,7 +369,7 @@ rm(b)
 
 The results text also splits the results above according to carcass and non-carcass.
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 a <- pedigree_meta %>%
   mutate(parent_year = coalesce(mother_year, father_year)) %>%
   filter(father_type == "outplant" | mother_type == "outplant") %>% 
@@ -366,20 +390,114 @@ rm(b)
 
 ```
 
+There are also CRR results presented for Reintros in the text, so we need to combined across sex values here too.
+
+
+```{r, message=FALSE, warning=FALSE}
+a <- pedigree_meta %>%
+  mutate(parent_year = coalesce(mother_year, father_year)) %>%
+  filter(father_type == "reintro" | mother_type == "reintro") %>% 
+  group_by(parent_year) %>%
+  summarise(offspring_n = n())
+
+b <- full_meta %>%
+  filter(type == "reintro") %>%
+  count(year) %>%
+  rename(parent_year = year, n_reintros = n)
+
+kable(left_join(a,b), align = "c", caption = "total number of offspring that assign to reintros per parent year") %>% kable_classic(full_width = F, html_font = "Cambria") %>%
+  kable_styling(fixed_thead = T) 
+
+rm(a)
+rm(b)
+
+
+```
+
+Also need the split into carcass and live:
+
+```{r, message=FALSE, warning=FALSE}
+a <- pedigree_meta %>%
+  mutate(parent_year = coalesce(mother_year, father_year)) %>%
+  filter(father_type == "reintro" | mother_type == "reintro") %>% 
+  group_by(parent_year, offspring_type) %>%
+  summarise(offspring_n = n())
+
+b <- full_meta %>%
+  filter(type == "reintro") %>%
+  count(year) %>%
+  rename(parent_year = year, n_reintros = n)
+
+kable(left_join(a,b), align = "c", caption = "total number of offspring that assign to reintros per parent year") %>% kable_classic(full_width = F, html_font = "Cambria") %>%
+  kable_styling(fixed_thead = T) 
+
+rm(a)
+rm(b)
+
+
+```
+
+
+And finally, the 2015 above Detroit reintros (in a future revision of this notebook, consider combining all of these into a single table)
+
+```{r, message=FALSE, warning=FALSE}
+a <- pedigree_meta %>%
+  mutate(parent_year = coalesce(mother_year, father_year)) %>%
+  filter(father_type == "reintro_above" | mother_type == "reintro_above") %>% 
+  group_by(parent_year) %>%
+  summarise(offspring_n = n())
+
+b <- full_meta %>%
+  filter(type == "reintro_above") %>%
+  count(year) %>%
+  rename(parent_year = year, n_reintros_above = n)
+
+kable(left_join(a,b), align = "c", caption = "total number of offspring that assign to reintros above Detroit per parent year") %>% kable_classic(full_width = F, html_font = "Cambria") %>%
+  kable_styling(fixed_thead = T) 
+
+rm(a)
+rm(b)
+
+
+```
+
+Also need the split into carcass and live:
+
+```{r, message=FALSE, warning=FALSE}
+a <- pedigree_meta %>%
+  mutate(parent_year = coalesce(mother_year, father_year)) %>%
+  filter(father_type == "reintro_above" | mother_type == "reintro_above") %>% 
+  group_by(parent_year, offspring_type) %>%
+  summarise(offspring_n = n())
+
+b <- full_meta %>%
+  filter(type == "reintro_above") %>%
+  count(year) %>%
+  rename(parent_year = year, n_reintros = n)
+
+kable(left_join(a,b), align = "c", caption = "total number of offspring that assign to reintros above Detroit per parent year") %>% kable_classic(full_width = F, html_font = "Cambria") %>%
+  kable_styling(fixed_thead = T) 
+
+rm(a)
+rm(b)
+
+
+```
+
 # Predictors of Fitness
 
 Here we fit some GLMs on fitness of outplanted salmon. We split the analysis below into two full model specifications: the specification from the draft report and a different model that might have more power to detect significant effects of variables on fitness. 
 
 ## Fixed Predictors (GLM)
 
-First we fit the model the same way as the draft report. For each outplant year, Total lifetime fitness ~ sex + release location + release date + sex*release date. All are fixed effects and all but date are factors (categorical). The GLM family is Poisson (log link function, Poisson distribution) and the GLM is evaluated using likelihood ratio test (chi-squared distribution) and individual levels of effects are evaluated with a Wald Tests (automatically done by R so included below) and likelihood-ratio tests (to match what was done previously). 
+First we fit the model the same way as the draft report. For each outplant year, Total lifetime fitness ~ sex + release location + release date. All are fixed effects and all but date are factors (categorical). The GLM family is Poisson (log link function, Poisson distribution) and the GLM is evaluated using likelihood ratio test (chi-squared distribution) and individual levels of effects are evaluated with a Wald Tests (automatically done by R so included below) and likelihood-ratio tests (to match what was done previously). 
 
 I also went a little further than what was done before:  
-I did model validation by (a) comparing the scaled residuals against rank transformed predicted values and (b) examining a QQ plot for goodness of fit (Kolmogorov–Smirnov test), overdispersion, and outliers. This was added tot report draft.
+I did model validation by (a) comparing the scaled residuals against rank transformed predicted values and (b) examining a QQ plot for goodness of fit (Kolmogorov–Smirnov test), overdispersion, and outliers. This was added to the report draft. The previous analysis conducted model validation using a Chi-squared goodness of fit test using Pearson residuals. The models failed the test (and therefore model validation) in every year, but this was not reported in the draft.
 
 I also went a little further here, but did not include the follwoing in the report draft. For years with significant full models and significant effects, we conducted stepwise model selection by AIC to find a sparse final model, assessed significance of predictor variables in the final model using a likelihood-ratio test, and assessed significance of individual levels of predictors using a Wald test.  
 
-__Some other notes:__
+__Some other notes:__  
 Note 1:  
 The previous workers on this project (Evans, Black, Bohn) all used jmp to fit this model. Specifically, in the previous North Santiam (and South Santiam) reports jmp was used to fit a glm with a poisson distribution. However, the data is a poor fit to the distribution: in each year the response variable demonstrates significant overdispersion. Sard solved this problem by fitting their models using a negative binomial in McKenzie, but previous workers on Santiam adjusted the tests using an "overdispersion parameter estimated by Pearson Chisq/DF." This approach is implemented in the R glm() function by using the "quasipoisson" rather than poisson family for the glm fit, but the authors of the most populat r packages for fitting GLMs believe it is inappropriate to output AIC or likelihood using this "quasipoisson" distribution, while the jmp authors don't seem to have an issue with reporting AIC/likelihoods when the response variable demonstrates overdispersion and report it. Table 5 reports to log-likelihood ratio of individual effects so to get the table with the exact same results, so we need to make a decision here.
 
@@ -388,12 +506,12 @@ I'd prefer to take the approach Sard took and fit with a different distribution 
 
 Alternatively we could (a) take the time to figure out how to run jmp, (b) use the quasipoisson (approach from before), but eliminate the log-likelihood ratio from table 5 and only report the p values.
 
-Note 2: 
-In my original interpretation of the methods section and logs I thought the previous model fits in JMP fit release date as a fixed factor. When I found the actual data provided to JMP I found that Bohn had converted release date to Julian day (continuous numerical predictor). This is a huge relief for interpreting the results, but still isn't optimal, because it doesn't take into account the contribution to variance of batch effects of release dates, only considers a linear relationship between julian day and log(TLF). A mixed model will can do both. 
-Also, we are ignoring non-linear relationships. What if julian day is strongly predictive of fitness but not linear - e.g. stabilizing selection with greatest fitness observed in the middle of the distribution but poor fitness at extremes.
+Note 2:  
+In my original interpretation of the methods section and logs I thought the previous model fits in JMP fit release date as a fixed factor. When I found the actual data provided to JMP I found that Bohn had converted release date to Julian day (continuous numerical predictor). This is a huge relief for interpreting the results, but still isn't optimal, because it doesn't take into account the contribution to variance of batch effects of release dates, only considers a linear relationship between julian day and log(TLF). A mixed model can do both (random batch effects + fixed effect of Julian day).  
+Also, we are ignoring non-linear relationships. What if Julian day is strongly predictive of fitness but not linear - e.g. stabilizing selection with greatest fitness observed in the middle of the distribution but poor fitness at extremes. We don't explore this possibility in the current approach. 
 
 Note 3:  
-The draft report methods state that interaction terms are fit in the model, but the results table shows model fits without interaction terms. Was there some stage of analysis where the model fits were analyzed with and without interaction terms (i.e. model selection)? Was the data examined for a potential interaction between release date and sex? How was this decision made? It seems like if the likelihood ratio test for interaction term was not significant it was dropped fromthe model. I did not fit the interaction term to follow what was done in the final version of the results, but when we discuss changing this part of the report this isn't something we should skip over.
+The draft report methods state that interaction terms are fit in the model, but the results table shows model fits without interaction terms. Was there some stage of analysis where the model fits were analyzed with and without interaction terms (i.e. model selection)? Was the data examined for a potential interaction between release date and sex? How was this decision made? It seems like if the likelihood ratio test for interaction term was not significant it was dropped from the model. Should I take the same approach if we decide to leave this part of the report exactly as is? I did not fit the interaction term to follow what was done in the final version of the results, but when we discuss changing this part of the report we should discuss this.
 
 __Approach Outline__  
 For each of the years below, I first present the structure of the data to determine if the full model can be fit. Then I fit the full model and test it using a log-likelihood ratio test against a null model that contains only an intercept. If there is a signifcant global/full model and evidence that predictors have significant effect (Wald test + likelihood ratio test), then I proceed to model validation and model selection and present estimates of effects of predictors of fitness.
@@ -546,8 +664,7 @@ simulationOutput <- simulateResiduals(fittedModel = glm_2014_full, plot = F)
 plot(simulationOutput)
 ```
 
-Model is a poor fit to the data, likely due to outliers. It seems there is dependence between the predicted values and the residuals. The model fit in JMP also failed validation, but the result was not reported. 
-
+Model is a poor fit to the data, likely due to outliers. Because we are dealing with count data, we might need a different approach to making sure outliers are the true source of problem and not model mispecification, but in any case there is dependence between the predicted values and the residuals and the qqplot reveals some issues. The model fit in JMP also failed validation, but the result was not reported. 
 
 
 Let's convert the paramter estimate to something more easy to interpret (invert the tranformation back to fitness)
@@ -560,7 +677,7 @@ exp(coef(glm_2014_full))
 
 Males have predicted 57% fitness of females in 2014.
 
-My take is that this absolutely should not be included in the draft as a significant effect of sex. We are violating model assumptions. We should explore why model validation failed and evaluate how severe of a problem we are dealing with. Maybe we're comfortable with this level of goodness of fit? Alternatively, maybe the model needs to be specified differently or we need to remove outliers. 
+My take is that this absolutely should not be included in the draft as a significant effect of sex. We are violating model assumptions. If we are committed to the modeling approach as is, we should explore why model validation failed and evaluate how severe of a problem we are dealing with. Maybe we're comfortable with this level of goodness of fit? Alternatively, maybe the model needs to be specified differently or we need to remove outliers. 
 
 ### 2015
 ```{r}
@@ -634,7 +751,7 @@ summary(msl_2015)
 exp(glm_2015_full$coefficients)
 ```
 
-Males have predicted 72% of females in 2015 
+Males have predicted 72% of females in 2015 and Dry Creek is better than Breitenbush
 
 
 ## Mixed Model (code not evaluated in the copy of the notebook)
@@ -645,11 +762,11 @@ Compared to the approach taken previously I think we can fit a model that provid
 
 I made a note of the rationale here below, in case we want to discuss in the future.
 
-Fitting date as a fixed categorical effect effectively asks if each individual release date is different from others. i.e. did something happen ON THAT DAY that changed the fitness of released fish compared to other days. This may be important to know, but what can this tell us that will allow an improvement to management practices? Simply that some days are better than other. This is an interesting result, but I think we can say more. For example, it doesn’t incorporate the autocorrelation in this variable that most readers include intuitively when trying to understand the questions we asking with our model. Tossing out this autocorrelation also reduces our power to find significant effects. For example, shouldn’t our model assume that two release dates closer together have more similar effects on fitness than two dates further apart, and if so, doesn’t this suggest the effect is significant? Put another way,including the effect of release date as a fixed, continuous variable is more appropriate if we are interested in evaluating the putative effect on fitness of environmental variables that vary over time and are therefore autocorrelated.
+Fitting date as a fixed categorical effect effectively asks if each individual release date is different from others. i.e. did something happen ON THAT DAY that changed the fitness of released fish compared to other days. This may be important to know, but what can this tell us that will allow an improvement to management practices? Simply that some days are better than other. This is an interesting result, but I think we can say more and there is a more interesting way to ask the question. Including the effect of release date as a fixed, continuous variable is more appropriate if we are interested in evaluating the putative effect on fitness of environmental variables that vary over time and are therefore autocorrelated, but then we are ignoring the batchiness of releases.
 
-There are also day-to-day release batch effects, of course, but these are better fit as random effects because we are more interested in their contribution to variance than their fixed effect per se (e.g. we assume release batch effects are part of population of unsampled batch effects that contribute to variance). A good way to think about this is that if we added infinite years of data, there would be infinitely more levels of these effects, suggesting this is best modeled as a random effect, but eventually we'd saturate the julian day of release. Since these two variables (release batch and julian day of release) are so strongly confounded we may have very limited power to evaluate the fixed effect after accounting for the random, unless we combine years.
+There are also day-to-day release batch effects, of course, but these are better fit as random effects because we are more interested in their contribution to variance than their fixed effect per se (e.g. we assume release batch effects are part of population of unsampled batch effects that contribute to variance). A good way to think about this is that if we added infinite years of data, there would be infinitely more levels of these effects, suggesting this is best modeled as a random effect, but eventually we'd saturate the julian day of release. Since these two variables (release batch and julian day of release) are so strongly confounded we may have very limited power to evaluate the fixed effect after accounting for the random, unless we combine years. As the model are currently specified we do not evaluate the contribution to variance of the batchiness of release day. We just model a linear relationship between julian day and fitness.
 
-By fitting just one model across all years, we increase power to estimate the effects of variables because levels the variables take are repeated across multiple years. (e.g. if releases into the resevoir are somehow reducing fitness, why are we trying to figure this out looking one year at a time, when there are releases there every year). Here we are not interested in year over year trends in fitness or the contributions of specific years to fitness as much as we are interested in the variation due to year and evaluating the effects of release date, sex and release location after accounting for annual variation. This suggests we should fit year as a random effect. Fitting year as a fixed effect asks a different question and perhaps we should evaluate this as well.
+A mixed model also allows us to combine years and gain power. By fitting just one model across all years, we increase power to estimate the effects of variables because levels the variables take are repeated across multiple years. (e.g. if releases into the resevoir are somehow reducing fitness, why are we trying to figure this out looking one year at a time, when there are releases there every year). Here we are not interested in year over year trends in fitness or the contributions of specific years to fitness as much as we are interested in the variation due to year and evaluating the effects of release date, sex and release location after accounting for annual variation. This suggests we should fit year as a random effect. Fitting year as a fixed effect asks a different question and perhaps we should evaluate this as well.
 
 Finally, I don't think there's any good reason to assume a linear relationship between Julian day and fitness. We should expect stabilizing selection, suggesting that we should evaluate a quadratic effect of Julian day (after scaling and centering) on fitness. 
 
@@ -752,10 +869,10 @@ The final model includes 2 fixed (sex and julian day) and one random effect (yea
 First let's get the likelihood ratios, df, and p-values (from chi-square test) for each effect 
 ```{r, eval = FALSE}
 kable(anova(mm_f12, mm_f5), caption = "LRT for Julian Day", align = "c") %>% # jday
-  kable_classic(full_width = F, html_font = "Arial")
+  kable_classic(full_width = F, html_font = "Cambria")
   
 kable(anova(mm_f11, mm_f5), caption = "LRT for Sex", align = "c") %>% # jday
-  kable_classic(full_width = F, html_font = "Arial")  
+  kable_classic(full_width = F, html_font = "Cambria")  
   
 ```
 
@@ -776,26 +893,14 @@ MAF: 0.02
 CIs: 95% confidence intervals from jacknife re-sampling method  
 Data: Data for a given year is the assigned offspring of that year  
 
-__Issues__  
-Note that there are two issues that are a little confusing here and may warrant resolving:  
+## Data Prep
+### Outplants
 
-_Which Cohorts: Outplant and Reintros OR Above and Below?_   
-We include all offspring that have at least one assigned offspring to a parent cohort as part of that parent cohort's dataset used to estimate Nb. There are two parent cohorts under consideration in the analysis: reintros, and outplants (3 if you also include rentros above Detroit). However there are only two biological parent cohorts, above Detroit and below Big Cliff. Carcass samples appear in the pedigree as parents with both outplants (above) and reintros (below), so they can be part of either cohort, either because the carcass was sampled above the dam (n = 15) or because the carcass was sampled below the dam (n = 427), and spawned below the dam, or spawned above the dam but passed over/through the dam after spawning.  
-As a consequence, our understanding of the census size of successful spawners in a cohort (as estimated by the number of parents in a given year/group with assigned offspring) is biased downwards, because any carcass samples from fish that spawned successfully as a member of this cohort are not counted.
-Since we can't say for sure if a carcass was part of the above or below dam cohort unless it's spawning partner is assigned (e.g it is part of a parent-offspring trio with a non-carcass sample parent), we can't simply add all carcass parentages to the total. However, we can count a carcass sample as part of the above or below dam cohort if it is a member of a trio. In the results below I present both numbers, we can choose which to include in the report down the road.
-
-_Single Parents_  
-A second way to improve our count of prents in a cohort would be to infer a second parent for single parent matches. If a offspring is assigned to a single parent, we can assume there was a second parent and the assignment was not made because (i) the parent was not included in our set of candidate parents because it was not sampled, (ii) the parent was sampled, but not included in our set of candidate parents because ithad insufficient data to be included, or (iii) the second parent was in the datset but incorrectly excluded due to assignment criteria. 
-
-In the case of (i) or (ii) we could simply add a second parent to the counts and imporve our estimate of the number of parents in a cohort. However the possibility of (iii) presents a problem. We might double count an individual, if it is excluded from some parentages, but not others. Also, we may over estimate the number of parents if an inferred excluded parent contributed to multiple parentages. I do not attempt to infer the number of parents accounting for single parentage because of these multiple issues.
-
-## Outplants
-
-### 2011 
+#### 2011 
 
 Let's create the input data for NeEstimator. We'll take advantage of a wrapper function from adegenet to output a genepop file all assigned offspring for each parent year.
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Here we filter the genotype data to get only offspring from 2011 cohor
 offspring_of_2011 <- pedigree_meta %>%
   filter(mother_year == 2011 | father_year ==2011) %>%
@@ -828,9 +933,9 @@ gts_off_of_2011 %<>%
 
 Neestimator results are not formatted to be easily parsed by machine. Instead, wrote results manually to a spreadsheet. We'll import it in the end.
 
-### 2012
+#### 2012
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Here we filter the genotype data to get only offspring from 2011 cohor
 offspring_of_2012 <- pedigree_meta %>%
   filter(mother_year == 2012 | father_year ==2012) %>%
@@ -861,9 +966,9 @@ gts_off_of_2012 %<>%
 
 ```
 
-### 2013
+#### 2013
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Here we filter the genotype data to get only offspring from 2011 cohor
 offspring_of_2013 <- pedigree_meta %>%
   filter(mother_year == 2013 | father_year ==2013) %>%
@@ -894,7 +999,7 @@ gts_off_of_2013 %<>%
 
 ```
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Here we filter the genotype data to get only offspring from 2011 cohor
 offspring_of_2014 <- pedigree_meta %>%
   filter(mother_year == 2014 | father_year ==2014) %>%
@@ -925,9 +1030,9 @@ gts_off_of_2014 %<>%
 
 ```
 
-### 2015
+#### 2015
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Here we filter the genotype data to get only offspring from 2011 cohor
 offspring_of_2015 <- pedigree_meta %>%
   filter(mother_year == 2015 | father_year ==2015) %>%
@@ -958,11 +1063,11 @@ gts_off_of_2015 %<>%
 
 ```
 
-## Reintros
+### Reintros
 
-### Reintro Above (2015)
+#### Reintro Above (2015)
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Here we filter the genotype data to get only offspring from 2011 cohor
 offspring_of_2015 <- pedigree_meta %>%
   filter(mother_year == 2015 | father_year ==2015) %>%
@@ -993,9 +1098,9 @@ gts_off_of_2015 %<>%
 
 ```
 
-### Reintro Below (2013)
+#### Reintro Below (2013)
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Here we filter the genotype data to get only offspring from 2011 cohor
 offspring_of_2013 <- pedigree_meta %>%
   filter(mother_year == 2013 | father_year ==2013) %>%
@@ -1027,9 +1132,9 @@ gts_off_of_2013 %<>%
 ```
 
 
-### Reintro Below (2014)
+#### Reintro Below (2014)
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Here we filter the genotype data to get only offspring from 2011 cohor
 offspring_of_2014 <- pedigree_meta %>%
   filter(mother_year == 2014 | father_year ==2014) %>%
@@ -1060,9 +1165,9 @@ gts_off_of_2014 %<>%
 
 ```
 
-### Reintro Below (2015)
+#### Reintro Below (2015)
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Here we filter the genotype data to get only offspring from 2011 cohor
 offspring_of_2015 <- pedigree_meta %>%
   filter(mother_year == 2015 | father_year ==2015) %>%
@@ -1111,14 +1216,14 @@ nb <- meta_data %>%
 
 # get basic counts of successful parents (candidate parents in row with at least one offspring)
 
-kable(pedigree_meta %>%
-  mutate(parent_year = coalesce(mother_year, father_year)) %>%
-  select( parent_year, father_id = father, mother_id = mother, father_type, mother_type) %>%
-  pivot_longer(cols = c(father_id, father_type, mother_id, mother_type), names_to = c("parent_sex", ".value"), names_sep = "_") %>%
-  filter(id != "none") %>%
-  distinct(id, .keep_all = TRUE) %>%
-  count(parent_year, type), align = "c", caption = "number of parents with at least one assigned offspring, parents considered individually") %>%
-  kable_classic(full_width = F, html_font = "Arial")
+# kable(pedigree_meta %>%
+#   mutate(parent_year = coalesce(mother_year, father_year)) %>%
+#   select( parent_year, father_id = father, mother_id = mother, father_type, mother_type) %>%
+#   pivot_longer(cols = c(father_id, father_type, mother_id, mother_type), names_to = c("parent_sex", ".value"), names_sep = "_") %>%
+#   filter(id != "none") %>%
+#   distinct(id, .keep_all = TRUE) %>%
+#   count(parent_year, type), align = "c", caption = "number of parents with at least one assigned offspring, parents considered individually") %>%
+#   kable_classic(full_width = F, html_font = "Cambria")
 
 #also add these results to the results table
 nb <- pedigree_meta %>%
@@ -1134,6 +1239,46 @@ nb <- pedigree_meta %>%
   rename(n_successful_parents = n)
 
   
+
+# now present nb
+
+nb %<>%
+  mutate(nb_n_ratio = Nb/n_successful_parents) %>%
+  relocate(year, type, Nb, ci_lower, ci_higher)
+
+kable(nb, align = "c", caption = "Nb results table") %>% kable_classic(full_width = F, html_font = "Cambria") %>%
+  footnote(number = c("n_succesful_parents: number of parents with at least one offspring in the final pedigree", "n_candidate_parents: total number of parents included as candidates in the pedigree analysis", "nb_n_ratio: (estimated Nb)/(n_successful_parents)"))
+```
+
+
+## Discussion
+
+These are some stray thoughts I have, don't feel the need to dive into the weeds here if pressed for time.
+
+
+
+__Issues__  
+Note that there are two issues that are a little confusing here and may warrant resolving:  
+
+_Which Cohorts: Outplant and Reintros OR Above and Below?_   
+We include all offspring that have at least one assigned offspring to a parent cohort as part of that parent cohort's dataset used to estimate Nb. There are two parent cohorts under consideration in the analysis: reintros, and outplants (3 if you also include rentros above Detroit). However there are only two biological parent cohorts, above Detroit and below Big Cliff. Carcass samples appear in the pedigree as parents with both outplants (above) and reintros (below), so they can be part of either cohort, either because the carcass was sampled above the dam (n = 15) or because the carcass was sampled below the dam (n = 427), and spawned below the dam, or spawned above the dam but passed over/through the dam after spawning.  
+As a consequence, our understanding of the census size of successful spawners in a cohort (as estimated by the number of parents in a given year/group with assigned offspring) is biased downwards, because any carcass samples from fish that spawned successfully as a member of this cohort are not counted.
+Since we can't say for sure if a carcass was part of the above or below dam cohort unless it's spawning partner is assigned (e.g it is part of a parent-offspring trio with a non-carcass sample parent), we can't simply add all carcass parentages to the total. However, we can count a carcass sample as part of the above or below dam cohort if it is a member of a trio. In the results below I present both numbers, we can choose which to include in the report down the road.
+
+_Single Parents_  
+A second way to improve our count of prents in a cohort would be to infer a second parent for single parent matches. If a offspring is assigned to a single parent, we can assume there was a second parent and the assignment was not made because (i) the parent was not included in our set of candidate parents because it was not sampled, (ii) the parent was sampled, but not included in our set of candidate parents because ithad insufficient data to be included, or (iii) the second parent was in the datset but incorrectly excluded due to assignment criteria. 
+
+In the case of (i) or (ii) we could simply add a second parent to the counts and imporve our estimate of the number of parents in a cohort. However the possibility of (iii) presents a problem. We might double count an individual, if it is excluded from some parentages, but not others. Also, we may over estimate the number of parents if an inferred excluded parent contributed to multiple parentages. I do not attempt to infer the number of parents accounting for single parentage because of these multiple issues.
+
+_Nb bigger than N_successful / synthesis of issues above_  
+
+Throughout the Nb results and discussion in the text we consider why Nb is sometimes larger or similar to the number of parents that produced at least one offspring in the pedigree. It should probably always be lower, substantially so given the variance year to year in population size, skewed sex ratios and other things going on. So what's going on here?
+
+Let's ignore the single parent issue for now.  
+
+
+```{r}
+
 # get counts of different types of parent pairs
 kable(pedigree_meta %>%
   mutate(parent_year = coalesce(mother_year, father_year)) %>%
@@ -1142,35 +1287,25 @@ kable(pedigree_meta %>%
   filter(parent_id != "none") %>%
   distinct(parent_id, .keep_all = TRUE) %>% 
   count(parent_year, parent_type), align = "c", caption = "number of parents with at least one assigned offspring, types for both parents presented if trio, see note about error in this table") %>%
-  kable_classic(full_width = F, html_font = "Arial")
+  kable_classic(full_width = F, html_font = "Cambria")
 
 # note there's a problem with this table, we filter duplicates, so when a single individual has spawning partners of multiple types, the count by type is only counted once. For example, a 2015 outplant individual that spawns with both other outplants and reintros is either included in the outplants total or the outplant/reintro total depdending on which is the first (by row order) in the pedigree dataframe. Figuring out the right way to add these up will take some time, so skipping for now unless we really want to include these numbers in the report.
-
-# now present nb
-
-nb %<>%
-  mutate(nb_n_ratio = Nb/n_successful_parents) %>%
-  relocate(year, type, Nb, ci_lower, ci_higher)
-
-kable(nb, align = "c", caption = "Nb results table") %>% kable_classic(full_width = F, html_font = "Arial") %>%
-  footnote(number = c("n_succesful_parents: number of parents with at least one offspring in the final pedigree", "n_candidate_parents: total number of parents included as candidates in the pedigree analysis", "nb_n_ratio: (estimated Nb)/(n_successful_parents)"))
 ```
 
+Consider the table above, it suggests which number to present as the number of parents from the pedigree is not straightforward. In the n_successful parents column in the Nb results table we consider each parent individually, in the table above we consider parent types for both parents in a trio, which is the more informative value to present, because it tells us about the actual cohort of individuals that spawned together. For example, for the 2011 outplant parent cohort, should the number be 51 to reflect only outplants, or 52 to reflect that we know that one carcass individual produced offspring in the pedigree with one outplants? 
 
-Let's ignore the single parent issue for now.  
-
-In the first two tables above we observe that deciding which number to present as the number of parents from the pedigree is not straightforward. In the first table we consider each parent individually, in the second table we consider parent types for both parents in a trio, which is the more informative value to present, because it tells us about the actual cohort of individuals that spawned together. For example, for the 2011 outplant parent cohort, should the number be 51 to reflect only outplants, or 52 to reflect that we know that one carcass individual produced offspring in the pedigree with one outplants? 
-
-We should also discuss why in some groups (all reintro below), the estimated Nb is greater than the number of successful parents in the pedigree. 
+Now that we've established this, let's discuss why in some groups (all reintro below), the estimated Nb is greater than the number of successful parents in the pedigree. 
 
 __Negative assortative mating?__  
 Maybe, but doubtful.   
 
 __Our assignment criteria are too stringent given the amount of mis-genotypting and undersampling of candidate parents?__  
-This might be the case, but we can't do much about this right now. It is a bit troubling that the problem is mostly restricted to one type (reintros below)
+This might be the case, but we can't do much about this right now. If true, it is a bit troubling that the problem is more severe in one parent type (reintros below) than others.
 
 __The cohort is artificially small because we split by type rather than spawning location?__   
-__YES__, we can positively assess this. In 2015, there are 125 parents above the dam that spawned with a different type (reintro vs outplant) than themselves. To accurately reflect the number of parents in the above dam cohort with at least a single offspring in the pedigree we need to use the second table from above. Including all parents we know to contribute above the dam (including carcasses) the inferred number of succesful parents should be 478 (reintros above + outplants + carcasses known to have spawned above the dam). I do some extra work to explore this in the section "2015 Combined" below. 
+__YES__, we can positively assess this. In 2015, there are at least 151 parents above the dam that spawned with a different type than themselve (e.g. reintro above/outplant). To accurately reflect the number of parents in the above dam cohort with at least a single offspring in the pedigree we need to use the table above. Including all parents we know to contribute above the dam (including carcasses) the inferred number of succesful parents should be 478 (reintros above + outplants + carcasses known to have spawned above the dam). I do some extra work to explore this in the section "2015 Combined" below. 
+
+
 
 __Note__ there's a problem with the second table. We filter duplicate parents from the pedigree to get the counts (i.e. count each successful parent once, not once per each offspring it produces), so when a single individual parent has spawning partners of multiple types, the count by type is only counted once. For example, a 2015 outplant individual that spawns with both other outplants and reintros is either included in the outplants total or the outplant/reintro total depdending on which is the first (by row order) in the pedigree dataframe. Figuring out the right way to add these up will take some time, in the interest of time I'm not going to fix this problem, unless we really want to include these numbers in the report. For now, we should just be aware that the counts in the second table are MINIMUMS, not the actual number, but they highlight the question about what is the best way to think about cohort size: by parent type, or by above/below the dams
 
@@ -1180,7 +1315,7 @@ __Note__ there's a problem with the second table. We filter duplicate parents fr
 To further explore the issues described above. I also ran NeEstimator for all parents above Detroit in 2015 (excluding carcasses sampled below the dam, but assigned to have spawned with a second parent above the dam). 
 
 
-```{r}
+```{r, message=FALSE, warning = FALSE}
 # Here we filter the genotype data to get only offspring from 2011 cohor
 offspring_of_2015 <- pedigree_meta %>%
   filter(mother_year == 2015 | father_year ==2015) %>%
@@ -1212,8 +1347,6 @@ gts_off_of_2015 %<>%
 ```
 
 For the 2015 above Detroit parent cohort (ignoring carcasses to be consistent with the table as presented earlier), the number of offspring in the dataset was 717, Nb was 332.1 (291.6 - 380.6). Here we see that when considered all of the successful parents above Detroit together, the Nb results are not so problematic. The ratio of Nb to number of successful parents is a more reasonable ~69% (compared to 95% for outplants and 92% for reintros). 
-
-
 
 
 
