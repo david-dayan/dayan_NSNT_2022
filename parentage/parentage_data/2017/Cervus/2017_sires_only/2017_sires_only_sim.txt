@@ -1,0 +1,120 @@
+Cervus 3.0.7 - (c) Copyright Tristan Marshall 1998-2014
+Distributed by Field Genetics Ltd - www.fieldgenetics.com
+Licensed for non-commercial use only
+
+Simulation of parentage analysis completed 4/4/2022 1:21:30 PM
+
+
+**** Summary statistics ****
+
+
+Father alone:
+
+Level       Confidence (%)  Critical LOD    Assignments        Assignment Rate  
+Strict               95.00         -999.00               1000                100%
+Relaxed              80.00         -999.00               1000                100%
+Unassigned                                                  0                  0%
+Total                                                    1000                100%
+
+Father given known mother:
+
+Level       Confidence (%)  Critical LOD    Assignments        Assignment Rate  
+Strict               95.00         -999.00               1000                100%
+Relaxed              80.00         -999.00               1000                100%
+Unassigned                                                  0                  0%
+Total                                                    1000                100%
+
+
+**** Files ****
+
+Input
+  Allele frequency file:          2017_alf.alf
+
+Output
+  Simulation summary file:        2017_sires_only_sim.txt
+  Simulation data file:           2017_sires_only_sim.sim
+
+
+**** Loci ****
+
+       1  Locus1
+       2  Locus2
+       3  Locus3
+       4  Locus4
+       5  Locus5
+       6  Locus6
+       7  Locus7
+       8  Locus8
+       9  Locus9
+      10  Locus10
+      11  Locus11
+      12  Locus12
+
+
+**** Simulation parameters ****
+
+Input
+  Number of offspring:                                      1000
+  Number of candidate fathers:                              2258
+  Proportion of candidate fathers sampled:                     0.9500
+
+  Proportion of loci typed:                                    1.00000000
+  Proportion of loci mistyped:                                 0.01000000
+  Error rate in likelihood calculations:                       0.01000000
+  Minimum number of typed loci:                                7
+
+Output
+  Confidence determined using:                               LOD
+  Relaxed confidence level:                                   80.00%
+  Strict confidence level:                                    95.00%
+
+
+**** LOD distributions ****
+
+
+Father alone:
+
+Identity of most likely candidate               N        Mean LOD    Standard Deviation
+True father                                         951       15.66                3.47
+Non-father (true father sampled)                      1        3.53                0.00
+Non-father (true father unsampled)                   48        1.20                3.47
+None                                                  0
+Total                                              1000
+
+Father given known mother:
+
+Identity of most likely candidate               N        Mean LOD    Standard Deviation
+True father                                         952       21.65                3.70
+Non-father (true father sampled)                      0        0.00                0.00
+Non-father (true father unsampled)                   48       -6.49                4.21
+None                                                  0
+Total                                              1000
+
+
+**** Breakdown of parentage assignments ****
+
+
+Father alone:
+
+Identity of most likely candidate               Confidence level
+                                                Strict          Relaxed         Most likely   
+True father                                         951 ( 95%)      951 ( 95%)      951 ( 95%)  
+Non-father (true father sampled)                      1 (  0%)        1 (  0%)        1 (  0%)  
+Non-father (true father unsampled)                   48 (  5%)       48 (  5%)       48 (  5%)  
+Total assignments                                  1000            1000            1000         
+No assignment made                                    0               0               0         
+Total tests                                        1000            1000            1000         
+
+Father given known mother:
+
+Identity of most likely candidate               Confidence level
+                                                Strict          Relaxed         Most likely   
+True father                                         952 ( 95%)      952 ( 95%)      952 ( 95%)  
+Non-father (true father sampled)                      0 (  0%)        0 (  0%)        0 (  0%)  
+Non-father (true father unsampled)                   48 (  5%)       48 (  5%)       48 (  5%)  
+Total assignments                                  1000            1000            1000         
+No assignment made                                    0               0               0         
+Total tests                                        1000            1000            1000         
+
+
+********************************************************************************

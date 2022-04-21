@@ -1,0 +1,31 @@
+Output from NeEstimator v2.1
+Starting time: Fri Apr 15 13:23:09 2022
+Input File: "genepop_2014.txt"
+
+Number of Loci = 12
+
+LD mating model: Random
+
+Population     1 [OtsAC17NSNT_2989]  (Number of Individuals = 2)
+****************
+--------------------------------------------------------------
+Lowest Allele Frequency Used     0.050       0.020       0.010  
+--------------------------------------------------------------
+
+LINKAGE DISEQUILIBRIUM METHOD
+
+Harmonic Mean Sample Size =        2.0         2.0         2.0
+Independent Comparisons =        282         282         282
+OverAll r^2 =                 0.914894    0.914894    0.914894
+Expected r^2 Sample =         1.565300    1.565300    1.565300
+Estimated Ne^ =               Infinite    Infinite    Infinite
+
+95% CIs for Ne^
+* Parametric                  Infinite    Infinite    Infinite
+                              Infinite    Infinite    Infinite
+
+**************************************************************
+
+Ending time: Fri Apr 15 13:23:09 2022
+-------------------------------------
+

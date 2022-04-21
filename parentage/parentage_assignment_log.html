@@ -3120,8 +3120,6 @@ require(magrittr)</code></pre>
 </li>
 <li>processed Cervus and Colony pedigrees for a given offspring year<br />
 </li>
-<li>final consensus pedigree for a given offspring year<br />
-</li>
 <li>note that the same parents occur can occur across multiple offspring years, so all information for a given parent may be spread across multiple subdirectories<br />
 </li>
 </ul></li>
@@ -3131,7 +3129,7 @@ require(magrittr)</code></pre>
 </li>
 <li>sample names have been unified (see <a href="#prepare-input-data">Prepare Input Data</a>)<br />
 </li>
-<li>offspring sample names gave precedence to carcass samples over live samples if they were likely duplicates in a previous approach, but Bohn and Kathleen decided that live samples should be given precedence. to save time, Bohn just changed the numbers AFTER THE FACT in the results, creating a bit of nightmare for replication. to avoid this problem, I changed offspring in the input files to reflect giving precendence to live samples over carcass samples when they seemingly from the same fish (see appendix b from Bohn’s assigment criteria). The end result is the same individuals and sample sizes per group as Bohn’s approach, but implemented from the beginning<br />
+<li>offspring sample names gave precedence to carcass samples over live samples if they were likely duplicates in a previous approach, but Bohn and O’Malley decided that live samples should be given precedence. To save time, Bohn just changed the numbers after the fact in the results, which was challenging to follow during replication. To avoid this problem, I changed offspring in the input files to reflect giving precendence to live samples over carcass samples when they are seemingly from the same fish (see appendix b from Bohn’s assigment criteria for how this is determined). The end result is the same individuals and sample sizes per group as Bohn’s approach, but implemented from the beginning.<br />
 </li>
 <li>a small number of Bohn’s input files did not reflect what was in the report (perhaps ad hoc editing of results to make changes without redoing analyses), went with the report numbers for my new runs</li>
 </ul></li>
@@ -3148,7 +3146,7 @@ require(magrittr)</code></pre>
 </div>
 <div id="log" class="section level2">
 <h2>Log</h2>
-<p>Changing input file names in situ was going to be very time consuming nearly each year (and often sex within a year) used a different naming scheme for the same individuals. Instead, I concatenated all of the “final” genotype files into a single dataset, confirmed samples sizes per group using table 3 from the draft report and then reconstructed datasets manually (in excel). I also took the opportunity to unify metadata into a single document. Because each individual only appears once in this dataset, slicing it to create the inputs for cervus and colony solved the naming convention problem.</p>
+<p>Changing input file names <em>in situ</em> was going to be very time consuming because nearly each year (and often sex within a year) used a different naming scheme for the same individuals. Instead, I concatenated all of the “final” genotype files into a single dataset, confirmed samples sizes per group using table 3 from the draft report and then reconstructed datasets manually (in excel). I also took the opportunity to unify metadata into a single document. Because each individual only appears once in this dataset, subsetting it to create the inputs for cervus and colony solved the naming convention problem described above.</p>
 <p>The document is available at “project_repo/parentage/parentage_data/full_dataset.xlsx”</p>
 </div>
 <div id="standardize-metadata-format" class="section level2">
@@ -3540,6 +3538,27 @@ full_dataset %&lt;&gt;%
   select(-date) %&gt;%
   left_join(dates, by = c(&quot;sample_id&quot; = &quot;sample_id&quot;)) %&gt;%
   relocate(date)</code></pre>
+</div>
+<div id="abovebelow" class="section level2">
+<h2>Above/Below</h2>
+<p>Whether a sample was outplanted/collected above or below Detroit dam is a piece of imformation we will use throughout assignment, but to keep nomenclature consistent with previous drafts, the “type” variable isn’t always clear on this. For example reintro usually means above Minto (below Detroit), but in some years there are reintroductions above Detroit. Also carcass includes both carcasses collected above Detroit and below.</p>
+<p>Here I try to change the “type” variable into something that can both be used to filter easily by above and below, but retains the structure from the draft report. Then I create a new variable to describe whether a fish is released above Detroit, or below Big Cliff.</p>
+<pre class="r"><code>#all outplants are above
+# all &quot;reintro&quot; is below
+# reintro above: aboce
+# reintro below: below
+# carcass: the fun one, checked all location names against map, all are below except the carcasses labeled as carcass_above, confirmed by Bohn labeled &quot;carcass below&quot; for nearly all sites. an exception is 2017, but these are confirmed below in other metadata
+
+# so we can just label the eceptions here and clean things up: reintros are always below except reintro_above, and carcasses are always below excecpt carcass_above
+
+full_dataset %&lt;&gt;%
+  mutate(type = case_when(type == &quot;reintro_below&quot; ~ &quot;reintro&quot;,
+                          type == &quot;carcass_below&quot; ~ &quot;carcass&quot;,
+                          TRUE ~ type))
+#let's add an above/below variable using this info now
+full_dataset %&lt;&gt;%
+  mutate(above_below = case_when(type %in% c(&quot;reintro&quot;, &quot;carcass&quot;) ~ &quot;below&quot;,
+                                 type %in% c(&quot;reintro_above&quot;, &quot;carcass_above&quot;, &quot;outplant&quot;) ~ &quot;above&quot;))</code></pre>
 <p>Excellent, this looks good and we’re ready to make some assignments.</p>
 </div>
 </div>
@@ -3549,7 +3568,7 @@ full_dataset %&lt;&gt;%
 <ol style="list-style-type: decimal">
 <li>Estimate allele frequencies using empirical data for each run (offspring year)<br />
 </li>
-<li>Simulate parentage using empirical allele frequencies and empirical dam, sire and offspring sample sizes. Additionally:
+<li>Simulate parentage using empirical allele frequencies and empirical dam and sire sample sizes, 1000 offspring simulated. Additionally:
 <ol style="list-style-type: lower-alpha">
 <li>95% proportion parents sampled<br />
 </li>
@@ -3563,6 +3582,13 @@ full_dataset %&lt;&gt;%
 </li>
 <li>80/95 confidence levels</li>
 </ol></li>
+</ol>
+<p>In some years the number of candidate parents was too large to run cervus (see note 5 in <a href="#assignment-criteria-summary">Assignment Criteria Summary</a> below). To reduce the number of candidate parents in the final cervus run, first eliminated parents one sex at a time with greater than one mismatch with all offspring. Then used this filtered set of candidate parents to conduct a normal parentage analysis. This should allow LOD scores to be comparable within an offspring year. Some notes on this:</p>
+<ol style="list-style-type: decimal">
+<li>Used the full dataset allele frequency file for all runs.<br />
+</li>
+<li>Conducted a new simulation file for each run (cutoffs depend on sample sizes)</li>
+<li>Each analysis in it’s own subdirectory. The final datset used for analysis is in subdirectory “filtered_parents”</li>
 </ol>
 </div>
 <div id="colony-log" class="section level1">
@@ -3583,6 +3609,472 @@ ALLELE FREQUENCY: UNKNOWN<br />
 Chance of Sampling a Parent: 95%<br />
 Known Sibs, Excluded Parents etc: 0</p>
 </blockquote>
+</div>
+<div id="assignment-criteria-summary" class="section level1">
+<h1>Assignment Criteria Summary</h1>
+<p><strong>Proposed Approach</strong> (new colony and cervus runs, same input individuals and genotypes, new assignment criteria)</p>
+<ol style="list-style-type: decimal">
+<li>Criteria below are always applied in the order presented here.<br />
+</li>
+<li>Use Bohn’s input individuals from colony and cervus (except for 2017 and 2020 which require new data).<br />
+</li>
+<li>Run colony and cervus again using same version across all offspring years.</li>
+<li>Colony pedigree:
+<ol style="list-style-type: lower-alpha">
+<li>Mismatch Filtering (see note 2 though):
+<ol style="list-style-type: lower-roman">
+<li>Remove any parent with &gt;1 mismatch<br />
+</li>
+<li>Remove any trios with &gt;2 mismatches<br />
+</li>
+</ol></li>
+<li>remove any impossible trios
+<ol style="list-style-type: lower-roman">
+<li>Both parents must have returned in the same year<br />
+</li>
+<li>Both parents must have been released either above Minto (below Detroit) or above Detroit<br />
+</li>
+<li>If one parent of a trio was collected as a carcass sample, recovery date must be after the release date of the other parent<br />
+</li>
+</ol></li>
+</ol></li>
+<li>Cervus pedigree:
+<ol style="list-style-type: lower-alpha">
+<li>Use same parameters as before<br />
+</li>
+<li>Combine this dataset with metadata, then use to exclude impossible trios (see 4b above)</li>
+<li>Trios (offspring and two parents): for each offspring choose best trio
+<ol style="list-style-type: lower-roman">
+<li>If there is at least one trio with (a) =&lt;2 total mismatches, (b) each parent has =&lt;1 mismatch, (c) significant LOD, then we will make a trio match for this offspring. If there is no trio that meets these criteria, then move on to attempt duo match below.</li>
+<li>Best trio is chosen by total number of mismatches, ties are broken by LOD score.<br />
+</li>
+</ol></li>
+<li>Duos (offspring and single parent):
+<ol style="list-style-type: lower-roman">
+<li>If no trio available for offspring, we attempt duo match.<br />
+</li>
+<li>If there is a dam or sire with =&lt;1 and significant LOD, we will make a duo assignment.<br />
+</li>
+<li>Best duo is chosen by number of mismatches, ties are broken by LOD score.<br />
+</li>
+</ol></li>
+</ol></li>
+<li>Consensus Pedigree – here we combine the colony and cervus results into the final pedigree used for later analysis
+<ol style="list-style-type: lower-alpha">
+<li>Disagreements are defined as any parent that does not agree between the two programs. This includes an assignment in one program and no assignment in the other.<br />
+</li>
+<li>If no disagreement, this is the final consensus assignment<br />
+</li>
+<li>if either program assigns a trio and disagree:
+<ol style="list-style-type: lower-roman">
+<li>if both assign trio: choose best using total number of mismatches, colony assignment takes precedence in case of tie<br />
+</li>
+<li>if only one trio assigned: this assignment takes precedence<br />
+</li>
+</ol></li>
+<li>if both programs assign duo and disagree:
+<ol style="list-style-type: lower-roman">
+<li>parent assignment with fewer mismatches takes precedence, ties go to colony<br />
+</li>
+</ol></li>
+<li>if only one program makes assignment:
+<ol style="list-style-type: lower-roman">
+<li>keep assignment (assignment takes precedence to no assignment)</li>
+</ol></li>
+</ol></li>
+</ol>
+<p>Notes:</p>
+<ol style="list-style-type: decimal">
+<li><p>The previous approach (called Bohn here for short, but represents Bohn’s attempts to best replicate Evans and Blacks approaches) conducts a single colony and cervus run for each offspring year. This is different than the approach taken by Sard, where each offspring year- parent year assignment is run separately in cervus, then the results are concatenated and assignment criteria applied to the concatenated result tables.<br />
+Each approach presents issues. For the Bohn approach, combining all parents for a given offspring year into a single cervus/colony run means that impossible parentages are considered by colony and cervus. This biases CRR downwards, because good parentage assignments are excluded in favor of impossible assignments, which are subsequently filtered out.<br />
+For the Nick approach, we reproduce this problem, despite running cervus separately for each offspring-year parent-year pair, because parents are picked one sex at a time using the concatenated dataset. We also introduce a new problem because ties are supposed to be broken by LOD but LOD is not comparable across runs.<br />
+My proposed solution is to use the same input file structure as Bohn (which includes all parents for a given offspring year in a single run), but use a Nick-like approach for assignment criteria to improve reproducibility (apply a single algorithm applied in order without manual intervention or judgement calls). Therefore, a good opportunity to improve on both would be to first filter the Cervus output for impossible parent trios, then choose the best match on the basis of mismatches. Mismatch ties are broken by best LOD score. In this way LOD scores become comparable (solving the issue with Nick’s approach and permitting tie-breaking) and impossible parents are not favored over possible parents, biasing assignment rate downwards.<br />
+There is no way to take the same approach for colony. Colony allows for certain paternities or maternaties to be excluded but not parent-pairs. Therefore Colony results will always have this bias. However, our approach to the consensus pedigree means that if an offspring’s parentage is excluded because of impossible parentage in Colony, we will maintain any Cervus parentage, reducing the possible downward bias of assignment rates due to this issue with the Colony parentage.</p></li>
+<li><p>Everyone who worked on these projects previously seems to have only output the trios with positive LOD score from Cervus. This seems to be motivated by the massive file size (1 line per each offspring x father x mother combo – files sizes &gt;300gb are common), but this creates a major problem: Cervus only permits filtering the output file by the TRIO LOD score, but everyone has been interested in making single parent assignments if no good trio is available. As a consequence, the true best single parent in cervus (according to number of mismatches or highest LOD score), may not appear in the output, because there is no trio with a positive LOD that includes this parent. This means we don’t have the all the information we need to apply the rules we claim to apply without resorting to manual matching for every single possible parent. In other words, previous methods sections statements such as “we chose the parent with the fewest mismatches” are potentially misleading, because we don’t actually have this information on hand. Among others, this may have been previous workers’ motivation for trusting colony assignments over cervus assignments.<br />
+Bohns’s approach takes a slightly different tact than others (possibly to solve this problem) but creates a potential time sink here and the opportunity to issues with manual assignment: when there are colony-cervus disagreements, Sandra’s criteria demand you break the tie with mismatch numbers, but these are theoretically unavailable in the output for the reasons stated above. So you wind up having to pull the raw data and make the assignment using “visual checks.”<br />
+A possible solution here is to output the massive file, then make it more manageable by filtering for a positive LOD score for EITHER a dam or sire using something fast and capable of handling large text files like awk. In a test case, this approach reduced file size to &lt;1%, making it manageable to manipulate in R, excel or elsewhere. I will attempt to output the full file using all parent-parent pairs in cervus.<br />
+<strong>Update</strong> – my desired approach (print the entire cervus output to file) is unmanageable with the equipment and time frame that I have. Output files get up to the terabyte range. It could be done with a cervus install on the server, but this would be very time consuming because cervus is windows dependent and would require setting up a virtual machine and a lot of other work.<br />
+Instead, to evaluated how severe a problem the filtered output represents. I checked if there was ever a case where colony made an assignment to a parent that didn’t have mismatch data. It never happened for the 251 offspring in 2018 despite many single parent assignments. This suggests that a single good parent is usually enough to push trio LOD above 0 for at least one row in the cervus output. So, the problem still exists (we may not have all the information to select the true best single parent), but it is likely uncommon enough that we should probably move on to bigger issues.<br />
+<strong>Update 2</strong> - While this problem doesn’t occur in 2018, it does occur in other years. In 2016 for example, there are 10 duos (single parent - offspring pairs) assigned by colony that do not appear in the cervus output. So we need to calculate differences another way.</p></li>
+<li>For the consensus pedigree there are a few general ideas from previous papers we are trying to implement into specific criteria here.
+<ol style="list-style-type: lower-alpha">
+<li>Mismatches takes precedence to resolve disagreements<br />
+</li>
+<li>Colony has greater accuracy when unknown parents are possible (Harrison et al 2013). In our systems this is always a possibility, so ambiguous cases (disagreements where we have no additional criteria to evaluate) default to colony.<br />
+</li>
+<li>The power to make a correct assignment is greater for trios than duos (see non-exclusion probabilities in table s3 in Sard 2016, and elsewhere)</li>
+</ol></li>
+<li><p>Application of the ideas above (3) tend to result in increasing the number of assignments when generating a consensus pedigree relative to the pedigree produced by either colony or cervus. This is anti-conservative (biases CRR and fitness upwards). Ultimately there is no perfect way to make a consesus pedigree and we have no empirical information against which to optimize our approach. Instead we prioritize consistency across years.</p></li>
+<li><p>The data structures inside Cervus can’t handle parent sample sizes in years 2018, 2019 and 2020 (personal communication Tristan Marshall - Cervus developer). Using the command line version gives aus a little more room, but not enough for 2020 which has ~800k possible parent pairs to consider for each offspring.<br />
+The recommended workaround is to reduce the number of parents in the analysis. The fastest/simplest way I’ve thought to do this without causing any downstream issues in interpreation or comparison across years is to first run a parentage analysis on each sex parent, then eliminate any parents we would not maintain in the final pedigree (e.g. no offspring in the dataset with &lt;=1 mismatch). We can use this information to thin set of candidate parents then run the full parentage assignment.</p></li>
+</ol>
+</div>
+<div id="assignment" class="section level1">
+<h1>Assignment</h1>
+<p>We make assignments in this section</p>
+<div id="cervus-assignment" class="section level2">
+<h2>Cervus Assignment</h2>
+<p>In this section we import data from cervus, clean it up, and apply the assignment criteria to choose the best parentage.</p>
+<pre class="r"><code>#import raw cervus output
+cervus_2014 &lt;- read_csv(&quot;parentage_data/2014/Cervus/2014_summary.csv&quot;)
+cervus_2015 &lt;- read_csv(&quot;parentage_data/2015/Cervus/2015_out.csv&quot;)
+cervus_2016 &lt;- read_csv(&quot;parentage_data/2016/Cervus/2016_cervus_out.csv&quot;)
+cervus_2017 &lt;- read_csv(&quot;parentage_data/2017/Cervus/filtered_parents/2017_filtered_parents_out.csv&quot;)
+cervus_2018 &lt;- read_csv(&quot;parentage_data/2018/Cervus/2018_out.csv&quot;)
+cervus_2019 &lt;- read_csv(&quot;parentage_data/2019/Cervus/filtered_parents/2019_filtered_out.csv&quot;)
+cervus_2020 &lt;- read_csv(&quot;parentage_data/2020/Cervus/filtered_parents/2020_filtered_out.csv&quot;)
+
+# combine years
+cervus_raw &lt;- bind_rows(cervus_2014, cervus_2015, cervus_2016, cervus_2017, cervus_2018, cervus_2019, cervus_2020)
+
+# clean up
+# cervus does not output machine-parseable, unique column names, instead it uses the index of the column to assign duplicate column names to either mother father or offspring, let's fix this, we'll also take the opportunity to unite names with the colony dataset 
+
+cervus_raw %&lt;&gt;%
+  rename(offspring_sample_id = &quot;Offspring ID&quot;, 
+         offspring_loci_typed =&quot;Loci typed&quot;, 
+         mother_sample_id = &quot;Candidate mother ID&quot;, 
+         mother_loci_typed = &quot;Loci typed_1&quot;,
+         mother_n_comp = &quot;Pair loci compared&quot;,
+         mother_mm = &quot;Pair loci mismatching&quot;,
+         mother_lod = &quot;Pair LOD score&quot;,
+         mother_confidence = &quot;Pair confidence&quot;,
+         father_sample_id = &quot;Candidate father ID&quot;,
+         father_loci_typed = &quot;Loci typed_2&quot;,
+         father_n_comp = &quot;Pair loci compared_1&quot;,
+         father_mm = &quot;Pair loci mismatching_1&quot;,
+         father_lod = &quot;Pair LOD score_1&quot; ,
+         father_confidence = &quot;Pair confidence_1&quot; ,
+         trio_n_comp = &quot;Trio loci compared&quot; ,
+         trio_mm = &quot;Trio loci mismatching&quot;,
+         trio_lod = &quot;Trio LOD score&quot;,
+         trio_confidence = &quot;Trio confidence&quot;) %&gt;%
+  select(-c(&quot;Pair top LOD&quot;,&quot;Pair top LOD_1&quot; , &quot;Trio top LOD&quot;  ) ) # remove unused columns</code></pre>
+<pre class="r"><code># combine with metadata
+
+#offspring
+cervus_full &lt;- full_dataset %&gt;%
+  select(sample_id, year, type, date) %&gt;%
+  rename_with(.fn = ~ paste0(&quot;offspring_&quot;, .x)) %&gt;%
+  right_join(cervus_raw, by = c(&quot;offspring_sample_id&quot; = &quot;offspring_sample_id&quot;))
+
+#father
+cervus_full &lt;- full_dataset %&gt;%
+  select(sample_id, year, type, date, above_below) %&gt;%
+  rename_with(.fn = ~ paste0(&quot;father_&quot;, .x)) %&gt;%
+  right_join(cervus_full, by = c(&quot;father_sample_id&quot; = &quot;father_sample_id&quot;))
+
+#mother
+cervus_full &lt;- full_dataset %&gt;%
+  select(sample_id, year, type, date, above_below) %&gt;%
+  rename_with(.fn = ~ paste0(&quot;mother_&quot;, .x)) %&gt;%
+  right_join(cervus_full, by = c(&quot;mother_sample_id&quot; = &quot;mother_sample_id&quot;))
+
+rm(cervus_raw)</code></pre>
+<pre class="r"><code># trios
+cervus_trios &lt;- cervus_full %&gt;%
+  filter(mother_mm &lt;= 1 &amp; father_mm &lt;= 1 &amp; trio_mm &lt;= 2 &amp; trio_confidence == &quot;*&quot;) %&gt;%    # get rows that meet good trio criteria
+  filter(father_year == mother_year) %&gt;% # remove impossibles 
+  filter(father_above_below == mother_above_below) %&gt;% # remove impossibles 
+  filter(! (str_starts(father_type, &quot;carcass&quot;) &amp; !(str_starts(mother_type, &quot;carcass&quot;)) &amp; father_date &lt; mother_date)) %&gt;% # remove impossibles 
+  filter(! (str_starts(mother_type, &quot;carcass&quot;) &amp; !(str_starts(father_type, &quot;carcass&quot;)) &amp; father_date &gt; mother_date)) %&gt;% # remove impossibles 
+  group_by(offspring_sample_id) %&gt;% # get best row per offspring
+  slice_min(trio_mm) %&gt;% # get best row per offspring
+  slice_max(trio_lod) # break ties by trio LOD
+  
+# duos
+# for duos the data structure is not &quot;tidy:&quot; we are choosing one parent at a time, yet each row does not represent one parent, but two. So to make things much easier, we will make the dataset a little longer (if not fully long), here each duo in the cervus output is made into its own row
+
+cervus_moms &lt;- cervus_full %&gt;%
+  select(-ends_with(c(&quot;date&quot;, &quot;year&quot;, &quot;type&quot;, &quot;below&quot;))) %&gt;% #get rid of all the info used to filter impossible trios, don't need it anymore
+  select(offspring_sample_id, starts_with(&quot;mother&quot;)) %&gt;% # now just get the mom info
+  rename_with(.fn = ~ str_remove(.x, &quot;mother_&quot;))
+
+cervus_dads &lt;- cervus_full %&gt;%
+  select(-ends_with(c(&quot;date&quot;, &quot;year&quot;, &quot;type&quot;, &quot;below&quot;))) %&gt;% #get rid of all the info used to filter impossible trios, don't need it anymore
+  select(offspring_sample_id, starts_with(&quot;father&quot;)) %&gt;% # now just get the mom info
+  rename_with(.fn = ~ str_remove(.x, &quot;father_&quot;))
+
+cervus_duos &lt;- bind_rows(cervus_dads, cervus_moms, .id = &quot;parent_sex&quot;)
+rm(cervus_dads, cervus_moms)
+
+cervus_duos %&lt;&gt;%
+  filter(!(offspring_sample_id %in% cervus_trios$offspring_sample_id)) %&gt;% # remove offspring that already have assigned trios
+  distinct(.keep_all = TRUE) %&gt;% # remove duplicated rows (same parent can appear across multiple rows in cervus output)
+  filter(mm &lt;= 1 &amp; confidence == &quot;*&quot;) %&gt;% # get duos that match criteria
+  group_by(offspring_sample_id) %&gt;% # get the best for each offspring
+  slice_min(mm) %&gt;%
+  slice_max(lod, with_ties = FALSE) %&gt;%
+  select(offspring_sample_id, sample_id, parent_sex) %&gt;% # now reassemble into the previous format
+  pivot_wider(id_cols = offspring_sample_id, names_from = parent_sex, values_from = sample_id) %&gt;%
+  rename(mother_sample_id=&quot;2&quot;, father_sample_id = &quot;1&quot;) 
+
+cervus_duos %&lt;&gt;%
+  left_join(distinct(select(cervus_full, starts_with(&quot;father&quot;), offspring_sample_id)), by = c( &quot;father_sample_id&quot; = &quot;father_sample_id&quot; , &quot;offspring_sample_id&quot; = &quot;offspring_sample_id&quot;)) %&gt;%
+  left_join(distinct(select(cervus_full, starts_with(&quot;mother&quot;), offspring_sample_id)), by = c( &quot;mother_sample_id&quot; = &quot;mother_sample_id&quot; , &quot;offspring_sample_id&quot; = &quot;offspring_sample_id&quot;)) %&gt;%
+  left_join(distinct(select(cervus_full, starts_with(&quot;offspring&quot;))), by = c(&quot;offspring_sample_id&quot; = &quot;offspring_sample_id&quot;))
+  
+### now combine into final cervus pedigree
+# let's get the info from unassigned offspring
+cervus_unassigned_offspring &lt;- cervus_full %&gt;%
+  filter(!(offspring_sample_id %in% cervus_trios$offspring_sample_id), !(offspring_sample_id %in% cervus_duos$offspring_sample_id)) %&gt;%
+  select(starts_with(&quot;offspring&quot;)) %&gt;%
+  distinct()
+
+cervus_final &lt;- bind_rows(cervus_trios, cervus_duos, cervus_unassigned_offspring) %&gt;%
+  relocate(offspring_sample_id, mother_sample_id, father_sample_id, starts_with(&quot;mother&quot;), starts_with(&quot;father&quot;), starts_with(&quot;trio&quot;))
+
+
+# for the test year (2016) there were offspring with more than one qualifying trios, so we can't be sure this code is fully debugged until we add years, alternatively this may be an attribute of how trio LOD is calculated in cervus</code></pre>
+</div>
+<div id="colony-assignment" class="section level2">
+<h2>Colony Assignment</h2>
+<p>In this section we import data from colony, clean it up and filter out impossible parents.</p>
+<pre class="r"><code>#import
+
+# colony exports data padded into pseudocolumns using different number of spaces, requires a smart importer, like read_table from readr
+colony_2014 &lt;- read_table(&quot;parentage_data/2014/Colony/results/2014.BestConfig&quot;)
+colony_2015 &lt;- read_table(&quot;parentage_data/2015/Colony/results/2015.BestConfig&quot;)
+colony_2016 &lt;- read_table(&quot;parentage_data/2016/Colony/results/2016.BestConfig&quot;)
+colony_2017 &lt;- read_table(&quot;parentage_data/2017/Colony/results/2017.BestConfig&quot;)
+colony_2018 &lt;- read_table(&quot;parentage_data/2018/Colony/results/2018.BestConfig&quot;)
+colony_2019 &lt;- read_table(&quot;parentage_data/2019/Colony/results/2019.BestConfig&quot;)
+colony_2020 &lt;- read_table(&quot;parentage_data/2020/Colony/results/2020.BestConfig&quot;)
+
+
+#combine into single dataset
+full_colony_raw &lt;- bind_rows(colony_2014, colony_2015, colony_2016, colony_2017, colony_2018, colony_2019, colony_2020)
+
+
+## lets add the metadata we'll need to filter later (year, type, date) for offspring and each parent
+#offspring
+full_colony &lt;- full_dataset %&gt;%
+  select(sample_id, year, type, date) %&gt;%
+  rename_with(.fn = ~ paste0(&quot;offspring_&quot;, .x)) %&gt;%
+  right_join(full_colony_raw, by = c(&quot;offspring_sample_id&quot; = &quot;OffspringID&quot;))
+
+#father
+full_colony &lt;- full_dataset %&gt;%
+  select(sample_id, year, type, date, above_below) %&gt;%
+  rename_with(.fn = ~ paste0(&quot;father_&quot;, .x)) %&gt;%
+  right_join(full_colony, by = c(&quot;father_sample_id&quot; = &quot;FatherID&quot;))
+
+#mother
+full_colony &lt;- full_dataset %&gt;%
+  select(sample_id, year, type, date, above_below) %&gt;%
+  rename_with(.fn = ~ paste0(&quot;mother_&quot;, .x)) %&gt;%
+  right_join(full_colony, by = c(&quot;mother_sample_id&quot; = &quot;MotherID&quot;))
+
+rm(full_colony_raw)</code></pre>
+<pre class="r"><code>## trios
+# filter trios for impossible parent pairs
+colony_trios &lt;- full_colony %&gt;%
+  filter(father_year == mother_year) %&gt;%
+  filter(father_above_below == mother_above_below) %&gt;%
+  filter(! (str_starts(father_type, &quot;carcass&quot;) &amp; !(str_starts(mother_type, &quot;carcass&quot;)) &amp; father_date &lt; mother_date)) %&gt;%
+  filter(! (str_starts(mother_type, &quot;carcass&quot;) &amp; !(str_starts(father_type, &quot;carcass&quot;)) &amp; father_date &gt; mother_date))
+
+# filter trios for mismatches
+colony_trios %&lt;&gt;%
+  left_join(select(cervus_full, offspring_sample_id, mother_sample_id, father_sample_id, ends_with(&quot;mm&quot;)), by = c(&quot;offspring_sample_id&quot; = &quot;offspring_sample_id&quot;, &quot;mother_sample_id&quot; = &quot;mother_sample_id&quot;, &quot;father_sample_id&quot; = &quot;father_sample_id&quot; )) %&gt;%
+  filter(father_mm &lt;= 1, mother_mm &lt;=1, trio_mm &lt;=2 ) </code></pre>
+<pre class="r"><code>## duos
+# get duos from output
+colony_duos &lt;- full_colony %&gt;%
+  filter(str_starts(mother_sample_id, &quot;#&quot;) | str_starts( father_sample_id, &quot;\\*&quot;)) %&gt;%
+  filter(!(str_starts(mother_sample_id, &quot;#&quot;) &amp; str_starts( father_sample_id, &quot;\\*&quot;))) 
+# filter duos for mismatches
+# for duos the situation is much more challenging because the singleparents are often not in the cervus output (see note 2 from assignment criteria summary) and we need to count mismatches ourselves
+
+#get simplified genotype data
+long_genos &lt;- full_dataset %&gt;%
+  select(sample_id, starts_with(c(&quot;Ot&quot;, &quot;Ssa&quot;, &quot;Ogo&quot;))) %&gt;%
+  pivot_longer(-sample_id, names_to = &quot;marker&quot;, names_pattern = &quot;(.+)\\.\\.\\.&quot;)
+
+
+# debugging example data, do not use in final analysis
+#long_genos_sample &lt;- long_genos %&gt;%
+#  filter(sample_id %in% c(&quot;NS-OP_11_0014&quot;, &quot;NS-OP_11_0015&quot;, &quot;NS-OP_11_0016&quot;, &quot;NS-OP_11_0018&quot;, &quot;NS-OP_11_0020&quot;, &quot;NS-OP_11_0024&quot;, &quot;NS-OP_11_0025&quot;, &quot;NS-OP_11_0026&quot;, &quot;OtsAC16NSNT_1002&quot;, &quot;NS-OP_12_0014&quot;))
+#comps_to_make &lt;- data.frame(parent_id = c( &quot;NS-OP_12_0014&quot;,&quot;NS-OP_11_0015&quot;), offspring_sample_id = c(&quot;OtsAC16NSNT_1002&quot;, &quot;NS-OP_11_0026&quot;))
+#mm_info &lt;- matrix(ncol=3, nrow=nrow(comps_to_make))
+#colnames(mm_info) &lt;- c(&quot;parent_id&quot;,&quot;offspring_sample_id&quot;, &quot;mm&quot; )
+
+markers &lt;- pull(distinct(long_genos, marker))
+
+# actual data
+mm_info &lt;- colony_duos %&gt;%
+  mutate(mother_sample_id = case_when(str_starts(mother_sample_id, &quot;#&quot;) ~ NA_character_,
+                                      TRUE ~ mother_sample_id),
+         father_sample_id = case_when(str_starts(father_sample_id, &quot;\\*&quot;) ~ NA_character_,
+                                      TRUE ~ father_sample_id) ) %&gt;%# turn unknown parents into NAs
+  select(offspring_sample_id, father_sample_id, mother_sample_id) %&gt;%
+  mutate(parent_id = coalesce(father_sample_id, mother_sample_id)) %&gt;% #combine parents into a single column
+  add_column(mm = NA) %&gt;%
+  relocate(parent_id, offspring_sample_id, mm)  # relocate columns to format expected by mismatch calculator function
+
+
+
+for (i in (1:nrow(mm_info))){
+  match_marker = 0
+  for (m in markers){
+    match_marker = match_marker + (sum(pull(long_genos[long_genos$marker == m &amp; long_genos$sample_id == as.character(mm_info[i,1]), 3] ) %in% pull(long_genos[long_genos$marker == m &amp; long_genos$sample_id == as.character(mm_info[i,2]), 3] )) &gt;=1)
+    #print(match_marker)
+  }
+  mismatch = 12-(match_marker)
+  #mm_info[i,1] &lt;- as.character(comps_to_make[i,1]) #print parent to results matrix
+  #mm_info[i,2] &lt;- as.character(comps_to_make[i,2]) #print offspring to results matrix
+  mm_info[i,3] &lt;- mismatch# print number of mismatches
+}
+
+# now that we have mismatches, remove any duos with &gt;1 mismatch
+colony_duos &lt;- mm_info %&gt;%
+  filter(mm &lt;=1) %&gt;%
+  select(offspring_sample_id, father_sample_id, mother_sample_id)
+
+
+## unassigned
+# collect unassigned info
+colony_unassign &lt;- full_colony %&gt;%
+  select(offspring_sample_id) %&gt;%
+  distinct(offspring_sample_id) %&gt;%
+  filter(!(offspring_sample_id %in% c(colony_duos$offspring_sample_id, colony_trios$offspring_sample_id)))
+
+
+# combine filtered trios with duos
+colony_final &lt;- bind_rows( select(colony_trios, offspring_sample_id, father_sample_id, mother_sample_id), colony_duos, colony_unassign)
+
+# here we should consider if we want to include NA rows for offspring with unassigned parents, will depend on our approach to consensus pedigree code, which is currently unwritten, to keep all just remove the last line of the duos code section</code></pre>
+<pre class="r"><code># let's check that the final colony pedigree matches expectation
+
+full_colony %&gt;%
+  filter(! (offspring_sample_id %in% colony_final$offspring_sample_id)) %&gt;%
+  View(.)
+
+#only cheked for 2016, but it worked perfectly in that year, come back and check again with the full dataset before finalizing assignments. </code></pre>
+</div>
+<div id="consensus-assignment" class="section level2">
+<h2>Consensus Assignment</h2>
+<pre class="r"><code>## collect and simplify mm info for tie breaking
+#colony first
+colony_for_consensus &lt;- colony_final %&gt;%
+  rename(colony_mother= mother_sample_id, colony_father = father_sample_id) %&gt;%
+  left_join(select(all_of(colony_trios), offspring_sample_id, colony_mother= mother_sample_id, colony_father = father_sample_id, colony_trio_mm = trio_mm), by = c(&quot;offspring_sample_id&quot; = &quot;offspring_sample_id&quot;, &quot;colony_mother&quot; = &quot;colony_mother&quot;, &quot;colony_father&quot; = &quot;colony_father&quot;)) %&gt;%
+  left_join(select(all_of(mm_info), offspring_sample_id, colony_mother= mother_sample_id, colony_father = father_sample_id, colony_father_mm = mm, colony_mother_mm = mm), by = c(&quot;offspring_sample_id&quot; = &quot;offspring_sample_id&quot;, &quot;colony_mother&quot; = &quot;colony_mother&quot;, &quot;colony_father&quot; = &quot;colony_father&quot;)) %&gt;%
+  mutate(colony_father_mm = case_when(is.na(colony_father) ~ NA_real_,
+                               TRUE ~ colony_father_mm),
+         colony_mother_mm = case_when(is.na(colony_mother) ~ NA_real_,
+                               TRUE ~ colony_mother_mm)) 
+
+#now cervus
+cervus_for_consensus &lt;- cervus_final %&gt;%
+  select(offspring_sample_id,  cervus_mother = mother_sample_id, cervus_mother_mm = mother_mm, cervus_father = father_sample_id, cervus_father_mm = father_mm, cervus_trio_mm = trio_mm)
+
+#now combine
+consensus_df &lt;- colony_for_consensus %&gt;%
+  left_join(cervus_for_consensus, by = c(&quot;offspring_sample_id&quot; = &quot;offspring_sample_id&quot;))</code></pre>
+<pre class="r"><code># now we apply the consensus rules
+
+# let's get trio information to make some of this easier/faster
+consensus_df %&lt;&gt;%
+  replace_na(list(colony_mother = &quot;none&quot;, colony_father = &quot;none&quot;, cervus_father = &quot;none&quot;, cervus_mother = &quot;none&quot;)) %&gt;%
+  mutate(colony_trio = case_when((colony_mother != &quot;none&quot; &amp; colony_father != &quot;none&quot;) ~ 1,
+                                 TRUE ~ 0),
+         cervus_trio = case_when((cervus_mother != &quot;none&quot; &amp; cervus_father != &quot;none&quot;) ~ 1,
+                                 TRUE ~ 0)
+         )
+
+# total agreement
+
+final_pedigree &lt;- consensus_df %&gt;%
+  mutate(final_mother = case_when((colony_mother == cervus_mother &amp; colony_father == cervus_father) ~ colony_mother, 
+                                  (colony_trio == 1 &amp; cervus_trio == 1) &amp; (cervus_trio_mm &lt; colony_trio_mm) ~ cervus_mother,
+                                  (colony_trio == 1 &amp; cervus_trio == 1) &amp; (cervus_trio_mm &gt; colony_trio_mm) ~ colony_mother,
+                                  (colony_trio == 1 &amp; cervus_trio == 1) ~ colony_mother,
+                                  (colony_trio == 1 &amp; cervus_trio == 0) ~ colony_mother,
+                                  (colony_trio == 0 &amp; cervus_trio == 1) ~ cervus_mother,
+                                  (colony_mother == &quot;none&quot; &amp; cervus_mother != &quot;none&quot; ) ~ cervus_mother, 
+                                  (colony_mother != &quot;none&quot; &amp; cervus_mother == &quot;none&quot;) ~ colony_mother,
+                                  (colony_mother == &quot;none&quot; &amp; cervus_mother == &quot;none&quot;) ~ &quot;none&quot;,
+                                  (colony_mother_mm &lt;= cervus_mother_mm) ~ colony_mother,
+                                  (colony_mother_mm &gt; cervus_mother_mm) ~ cervus_mother)) %&gt;%
+  mutate(final_father = case_when((colony_father == cervus_father &amp; colony_father == cervus_father) ~ colony_father, 
+                                  (colony_trio == 1 &amp; cervus_trio == 1) &amp; (cervus_trio_mm &lt; colony_trio_mm) ~ cervus_father,
+                                  (colony_trio == 1 &amp; cervus_trio == 1) &amp; (cervus_trio_mm &gt; colony_trio_mm) ~ colony_father,
+                                  (colony_trio == 1 &amp; cervus_trio == 1) ~ colony_father,
+                                  (colony_trio == 1 &amp; cervus_trio == 0) ~ colony_father,
+                                  (colony_trio == 0 &amp; cervus_trio == 1) ~ cervus_father,
+                                  (colony_father == &quot;none&quot; &amp; cervus_father != &quot;none&quot; ) ~ cervus_father, 
+                                  (colony_father != &quot;none&quot; &amp; cervus_father == &quot;none&quot;) ~ colony_father,
+                                  (colony_father == &quot;none&quot; &amp; cervus_father == &quot;none&quot;) ~ &quot;none&quot;,
+                                  (colony_father_mm &lt;= cervus_father_mm) ~ colony_father,
+                                  (colony_father_mm &gt; cervus_father_mm) ~ cervus_father)) %&gt;%
+  relocate(final_mother, final_father, colony_mother, colony_father, cervus_mother, cervus_father)</code></pre>
+<pre class="r"><code># it looks like the code above wasn't perfect, there's a case where each program assigns a single good parent, but of opposite sex. Reading the description of the assignment criteria, one would think the final retained parentage would be a single parent, but the code above will produce a trio. This is not good becaue it can also produce impossible parentages. This only happens in 0.07% of the assignments, so it was easy to miss in the first round of debugging.
+
+# this code chunk does some testing/debugging of the fix, don't run in the final
+
+# cases of this are below
+
+ final_pedigree %&gt;%
+  filter(final_father != &quot;none&quot;, final_mother != &quot;none&quot;, cervus_father == &quot;none&quot;, cervus_mother != &quot;none&quot;, colony_father != &quot;none&quot;, colony_mother == &quot;none&quot;) %&gt;% View(.)
+
+ final_pedigree %&gt;%
+  filter(final_father != &quot;none&quot;, final_mother != &quot;none&quot;, cervus_father != &quot;none&quot;, cervus_mother == &quot;none&quot;, colony_father == &quot;none&quot;, colony_mother != &quot;none&quot;) %&gt;% View(.)
+
+#fortunately this is fixable. We can use the same dataframe from above and simply choose a single parent on the basis of MM, with ties going to colony. 
+
+
+fp2 &lt;- final_pedigree %&gt;%
+  mutate(final_father = case_when((final_father != &quot;none&quot; &amp; final_mother != &quot;none&quot; &amp; cervus_father == &quot;none&quot; &amp; cervus_mother != &quot;none&quot; &amp; colony_father != &quot;none&quot; &amp; colony_mother == &quot;none&quot; &amp; cervus_mother_mm &lt; colony_father_mm) ~ &quot;none&quot;,
+                                  TRUE ~ final_father)) %&gt;%
+  mutate(final_mother = case_when((final_father != &quot;none&quot; &amp; final_mother != &quot;none&quot; &amp; cervus_father == &quot;none&quot; &amp; cervus_mother != &quot;none&quot; &amp; colony_father != &quot;none&quot; &amp; colony_mother == &quot;none&quot; &amp; cervus_mother_mm &gt;= colony_father_mm) ~ &quot;none&quot;,
+                                  TRUE ~ final_mother)) %&gt;%
+  mutate(final_mother = case_when((final_father != &quot;none&quot; &amp; final_mother != &quot;none&quot; &amp; cervus_father != &quot;none&quot; &amp; cervus_mother == &quot;none&quot; &amp; colony_father == &quot;none&quot; &amp; colony_mother != &quot;none&quot; &amp; (colony_mother_mm &gt; cervus_father_mm)) ~ &quot;none&quot;,
+                                  TRUE ~ final_mother)) %&gt;%
+  mutate(final_father = case_when((final_father != &quot;none&quot; &amp; final_mother != &quot;none&quot; &amp; cervus_father != &quot;none&quot; &amp; cervus_mother == &quot;none&quot; &amp; colony_father == &quot;none&quot; &amp; colony_mother != &quot;none&quot; &amp; (colony_mother_mm &lt;= cervus_father_mm)) ~ &quot;none&quot;,
+                                  TRUE ~ final_father))
+
+
+
+# check if this worked
+anti_join(fp2, final_pedigree) %&gt;% View(.) 
+# yes, for the fathers, we should have only changed on eof the three cases</code></pre>
+<pre class="r"><code># now we implement the fix from above
+final_pedigree %&lt;&gt;%
+  mutate(final_father = case_when((final_father != &quot;none&quot; &amp; final_mother != &quot;none&quot; &amp; cervus_father == &quot;none&quot; &amp; cervus_mother != &quot;none&quot; &amp; colony_father != &quot;none&quot; &amp; colony_mother == &quot;none&quot; &amp; cervus_mother_mm &lt; colony_father_mm) ~ &quot;none&quot;,
+                                  TRUE ~ final_father)) %&gt;%
+  mutate(final_mother = case_when((final_father != &quot;none&quot; &amp; final_mother != &quot;none&quot; &amp; cervus_father == &quot;none&quot; &amp; cervus_mother != &quot;none&quot; &amp; colony_father != &quot;none&quot; &amp; colony_mother == &quot;none&quot; &amp; cervus_mother_mm &gt;= colony_father_mm) ~ &quot;none&quot;,
+                                  TRUE ~ final_mother)) %&gt;%
+  mutate(final_mother = case_when((final_father != &quot;none&quot; &amp; final_mother != &quot;none&quot; &amp; cervus_father != &quot;none&quot; &amp; cervus_mother == &quot;none&quot; &amp; colony_father == &quot;none&quot; &amp; colony_mother != &quot;none&quot; &amp; (colony_mother_mm &gt; cervus_father_mm)) ~ &quot;none&quot;,
+                                  TRUE ~ final_mother)) %&gt;%
+  mutate(final_father = case_when((final_father != &quot;none&quot; &amp; final_mother != &quot;none&quot; &amp; cervus_father != &quot;none&quot; &amp; cervus_mother == &quot;none&quot; &amp; colony_father == &quot;none&quot; &amp; colony_mother != &quot;none&quot; &amp; (colony_mother_mm &lt;= cervus_father_mm)) ~ &quot;none&quot;,
+                                  TRUE ~ final_father))</code></pre>
+<pre class="r"><code># quick stats 
+final_pedigree %&gt;%
+  summarise(unassigned_n = sum(final_mother == &quot;none&quot; &amp; final_father == &quot;none&quot;, na.rm = TRUE))
+
+#write_tsv(final_pedigree, &quot;final_pedigree.txt&quot;)</code></pre>
+</div>
+<div id="save-pedigree" class="section level2">
+<h2>Save Pedigree</h2>
+<p>Let’s save these results as txt files and r objects that can be used in subsequent analyses.</p>
+<p>Metadata first. We’ve made some changes to the metadata, let’s save a final version of this information</p>
+<pre class="r"><code>#everything 
+save(full_dataset, file= &quot;parentage_results/full_dataset.R&quot;)
+write_tsv(full_dataset, &quot;parentage_results/full_dataset.txt&quot;)
+
+# metadata only
+meta_data &lt;- full_dataset %&gt;%
+  select(-starts_with(c(&quot;Ot&quot;, &quot;Ogo&quot;, &quot;Ssa&quot;)))
+save(meta_data, file= &quot;parentage_results/meta_data.R&quot;)
+write_tsv(meta_data, &quot;parentage_results/meta_data.txt&quot;)  </code></pre>
+<p>Now the pedigree.</p>
+<pre class="r"><code>pedigree &lt;- final_pedigree %&gt;%
+  select(offspring_sample_id, mother = final_mother, father = final_father)
+
+save(pedigree, file = &quot;parentage_results/pedigree.R&quot;)
+write_tsv(pedigree, &quot;parentage_results/pedigree.txt&quot;)</code></pre>
+</div>
 </div>
 
 

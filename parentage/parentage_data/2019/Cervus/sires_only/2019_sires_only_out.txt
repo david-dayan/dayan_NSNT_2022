@@ -1,0 +1,91 @@
+Cervus 3.0.7 - (c) Copyright Tristan Marshall 1998-2014
+Distributed by Field Genetics Ltd - www.fieldgenetics.com
+Licensed for non-commercial use only
+
+Parentage analysis completed 3/30/2022 2:37:20 PM
+
+
+**** Summary statistics ****
+
+
+Father alone (all offspring):
+
+Level       Confidence (%)  Critical LOD    Assignments        Assignment Rate  
+                                            Observed Expected  Observed Expected
+Strict               95.00           -2.50      795 (    811)      97%    ( 99%)
+Relaxed              80.00         -999.00      817 (    819)     100%    (100%)
+Unassigned                                        2 (      0)       0%    (  0%)
+Total                                           819 (    819)     100%    (100%)
+
+Father alone (mother unknown):
+
+Level       Confidence (%)  Critical LOD    Assignments        Assignment Rate  
+                                            Observed Expected  Observed Expected
+Strict               95.00           -2.50      795 (    811)      97%    ( 99%)
+Relaxed              80.00         -999.00      817 (    819)     100%    (100%)
+Unassigned                                        2 (      0)       0%    (  0%)
+Total                                           819 (    819)     100%    (100%)
+
+
+**** Number of individuals tested ****
+
+Offspring (total):                                           819
+  Tested (typed at 7 or more loci):                          819
+  Not tested (typed at fewer than 7 loci):                     0
+
+Candidate fathers (total):                                  2721
+  Tested (typed at 7 or more loci):                         2721
+  Not tested (typed at fewer than 7 loci):                     0
+  Average number of candidate fathers per offspring:        2721
+  Average proportion of sampled candidate fathers:             1.0000
+
+
+**** Files ****
+
+Input
+  Offspring file:                 2019_offspring.txt
+  Candidate father file:          2019_sires.txt
+  Genotype file:                  2019_genos.txt
+  Allele frequency file:          2019_alf.alf
+  Simulation data file:           2019_sires_only.sim
+
+Output
+  Parentage summary file:         2019_sires_only_out.txt
+  Parentage data file:            2019_sires_only_out.csv
+
+
+**** Loci ****
+
+       1  Locus1
+       2  Locus2
+       3  Locus3
+       4  Locus4
+       5  Locus5
+       6  Locus6
+       7  Locus7
+       8  Locus8
+       9  Locus9
+      10  Locus10
+      11  Locus11
+      12  Locus12
+
+
+**** Simulation parameters ****
+
+Input
+  Number of offspring:                                      1000
+  Number of candidate fathers:                              2721
+  Proportion of candidate fathers sampled:                     0.9500
+
+  Proportion of loci typed:                                    1.00000000
+  Proportion of loci mistyped:                                 0.01000000
+  Error rate in likelihood calculations:                       0.01000000
+  Minimum number of typed loci:                                7
+
+Output
+  Confidence determined using:                               LOD
+  Relaxed confidence level:                                   80.00%
+  Strict confidence level:                                    95.00%
+
+
+********************************************************************************

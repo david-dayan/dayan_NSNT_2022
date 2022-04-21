@@ -1,0 +1,91 @@
+Cervus 3.0.7 - (c) Copyright Tristan Marshall 1998-2014
+Distributed by Field Genetics Ltd - www.fieldgenetics.com
+Licensed for non-commercial use only
+
+Parentage analysis completed 3/30/2022 2:48:04 PM
+
+
+**** Summary statistics ****
+
+
+Mother alone (all offspring):
+
+Level       Confidence (%)  Critical LOD    Assignments        Assignment Rate  
+                                            Observed Expected  Observed Expected
+Strict               95.00           -1.50      784 (    810)      96%    ( 99%)
+Relaxed              80.00         -999.00      819 (    819)     100%    (100%)
+Unassigned                                        0 (      0)       0%    (  0%)
+Total                                           819 (    819)     100%    (100%)
+
+Mother alone (father unknown):
+
+Level       Confidence (%)  Critical LOD    Assignments        Assignment Rate  
+                                            Observed Expected  Observed Expected
+Strict               95.00           -1.50      784 (    810)      96%    ( 99%)
+Relaxed              80.00         -999.00      819 (    819)     100%    (100%)
+Unassigned                                        0 (      0)       0%    (  0%)
+Total                                           819 (    819)     100%    (100%)
+
+
+**** Number of individuals tested ****
+
+Offspring (total):                                           819
+  Tested (typed at 7 or more loci):                          819
+  Not tested (typed at fewer than 7 loci):                     0
+
+Candidate mothers (total):                                  2444
+  Tested (typed at 7 or more loci):                         2444
+  Not tested (typed at fewer than 7 loci):                     0
+  Average number of candidate mothers per offspring:        2444
+  Average proportion of sampled candidate mothers:             1.0000
+
+
+**** Files ****
+
+Input
+  Offspring file:                 2019_offspring.txt
+  Candidate mother file:          2019_dams.txt
+  Genotype file:                  2019_genos.txt
+  Allele frequency file:          2019_alf.alf
+  Simulation data file:           2019_dams_only_sim.sim
+
+Output
+  Parentage summary file:         2019_dams_only_out.txt
+  Parentage data file:            2019_dams_only_out.csv
+
+
+**** Loci ****
+
+       1  Locus1
+       2  Locus2
+       3  Locus3
+       4  Locus4
+       5  Locus5
+       6  Locus6
+       7  Locus7
+       8  Locus8
+       9  Locus9
+      10  Locus10
+      11  Locus11
+      12  Locus12
+
+
+**** Simulation parameters ****
+
+Input
+  Number of offspring:                                      1000
+  Number of candidate mothers:                              2444
+  Proportion of candidate mothers sampled:                     0.9500
+
+  Proportion of loci typed:                                    1.00000000
+  Proportion of loci mistyped:                                 0.01000000
+  Error rate in likelihood calculations:                       0.01000000
+  Minimum number of typed loci:                                7
+
+Output
+  Confidence determined using:                               LOD
+  Relaxed confidence level:                                   80.00%
+  Strict confidence level:                                    95.00%
+
+
+********************************************************************************

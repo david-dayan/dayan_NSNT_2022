@@ -1,0 +1,30 @@
+Output file path & name : 'C:\Colony\2014\2014'
+Number of loci : 12
+Number of offspring in the sample : 800
+Outbreeding (0) or inbreeding (1) model : 0
+Number of male candidates : 170
+Number of female candidates : 176
+Number of known paternal sibships : 0
+Number of known maternal sibships : 0
+Number of offspring with excluded fathers : 0
+Number of offspring with excluded mothers : 0
+Male mating system : Polygamy
+Female mating system : Polygamy
+Number of threads : 1
+Number of Excluded Paternal Sibships : 0
+Number of Excluded Maternal Sibships : 0
+Dioecious (2) or monoecious (1) : 2
+Seed for random number generator : 1234
+Allele frequency : No updating by accounting for the inferred relationship
+Species : Diploid
+Sibship scaling : No
+Sibship size prior : No
+Known population allele frequency : No
+Number of run : 1
+Length of run : Medium
+Monitor intermiediate results by : Every 1 second
+Prob. a dad is included in the male candidates : .95
+Prob. a mum is included in the female candidates : .95
+Project data input produced : 29/03/2022
+NOTE to the Project:
+
