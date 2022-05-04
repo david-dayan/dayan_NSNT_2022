@@ -7885,6 +7885,38 @@ reintro
 </tbody>
 </table>
 </div>
+<div id="notes" class="section level2">
+<h2>Notes</h2>
+<div id="math-check" class="section level3">
+<h3>Math Check</h3>
+<p>The math here can get a little funky because we combine duo and trio assignments. Let’s manually calculate the values here from the pedigree and check that they match the output of the notebook code above.</p>
+<p>Among the 149 outplants in 2011, 72 were female and 77 were male. There were 94 total offspring (18, 33, and 43 in 2014, 2015 and 2016 respectively). Of the 94 total offspring 84 were assigned to a mother and 67 were assigned to a father for fitness female = 1.21 and fitness male = 0.87.</p>
+<p>For overall mean fitness we cannot simply divide the number of offspring by number of parents like above because some offspring are assigned to two parents while others are assigned to two. Instead we sum the TLF of each parent and divide by the number of parents. In 2011 the sum of TLF across individual parents is 149 for overall mean fitness of 1. Instead of using the code above here, I combined mothers and fathers from the pedigree and summed 2011 outplants. Calculating fitness this way, if all assignments were trios we need a fitness of 2 to reach an overall CRR of 1.</p>
+<p>All looks good!</p>
+</div>
+<div id="comparisons" class="section level3">
+<h3>2015 comparisons</h3>
+<p>We should probably build a more complex model here, but for now let’s do a one-liner analysis to see if 2015 reintros above did significantly better than reintros below or outplants above.</p>
+<pre class="r"><code>summary(aov(data = filter(parents, year == 2015, type %in% c(&quot;outplant&quot;, &quot;reintro_above&quot;, &quot;reintro&quot;)), tlf ~ type))</code></pre>
+<pre><code>##               Df Sum Sq Mean Sq F value   Pr(&gt;F)    
+## type           2     83   41.40   12.26 5.21e-06 ***
+## Residuals   1618   5465    3.38                     
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+<pre class="r"><code>TukeyHSD(aov(data = filter(parents, year == 2015, type %in% c(&quot;outplant&quot;, &quot;reintro_above&quot;, &quot;reintro&quot;)), tlf ~ type))</code></pre>
+<pre><code>##   Tukey multiple comparisons of means
+##     95% family-wise confidence level
+## 
+## Fit: aov(formula = tlf ~ type, data = filter(parents, year == 2015, type %in% c(&quot;outplant&quot;, &quot;reintro_above&quot;, &quot;reintro&quot;)))
+## 
+## $type
+##                             diff         lwr       upr     p adj
+## reintro-outplant       0.1478186 -0.23089263 0.5265299 0.6304713
+## reintro_above-outplant 0.5211177  0.27421357 0.7680218 0.0000024
+## reintro_above-reintro  0.3732991 -0.03744309 0.7840412 0.0837750</code></pre>
+<p>NOR salmon had significantly higher fitness HOR salmon in the above Detroit habitat according to ANOVA, but not compared to NOR salmon reintroduced to below Big Cliff. Note this result should NOT be trusted, ANOVA on overdispersed count data is inappropriate. Need to build a GLM here. Will consider taking the time to do this after draft is complete. Also the factors are mispecified, rather than compare the three groups, the effects of origin and habitat should treated as separate factors</p>
+</div>
+</div>
 </div>
 <div id="cohort-replacement-rates" class="section level1">
 <h1>Cohort Replacement Rates</h1>
@@ -8545,7 +8577,7 @@ M
 </table>
 </div>
 <pre class="r"><code># Let's check one of these to make sure the code is working correctly. In 2016, there were 452 male outplants. These 452 potential fathers appear in the final pedigree 1092 times. Of these 1092 offspring, 723 is male. Therefore the correct CRR for 2016 male outplants is 1.5995575. This matches the table.</code></pre>
-<p>The results test also presents CRR not split by sex, but doesn’t call it CRR or do the calculation (just presents the number of outplant parents and the number of offspring assigned to them). Let’s calculate these below, so it is easier to write this results section.</p>
+<p>The results test also presents the numerator and denominator of CRR not split by sex, but doesn’t call it CRR or do the calculation (just presents the number of outplant parents and the number of offspring assigned to them - for good reason as this could paint an overly rosey picture with uneven sex ratios). Let’s sum these below, so it is easier to write this result section.</p>
 <pre class="r"><code>a &lt;- pedigree_meta %&gt;%
   mutate(parent_year = coalesce(mother_year, father_year)) %&gt;%
   filter(father_type == &quot;outplant&quot; | mother_type == &quot;outplant&quot;) %&gt;% 
@@ -9486,7 +9518,7 @@ str(glm_2014_data)</code></pre>
 <p>For 2014, we will fit the full model</p>
 <p>Let’s fit the model and test for global significance.</p>
 <pre class="r"><code>#glm_2011 &lt;- glm.nb(tlf ~ geno_sex + date +geno_sex*date , data = glm_2011_data)
-glm_2014_full &lt;- glm.nb(tlf ~ geno_sex + jday + location  , data = glm_2014_data)
+glm_2014_full &lt;- glm.nb(tlf ~ geno_sex + jday + location   , data = glm_2014_data)
 glm_2014_null &lt;- glm.nb(tlf ~ 1 , data = glm_2014_data)
 
 # test for global
