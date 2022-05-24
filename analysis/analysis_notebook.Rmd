@@ -11,8 +11,10 @@ output:
 
 ```{r, message = FALSE, warning=FALSE}
 require(RLDNe)
+require(car)
 require(DHARMa)
 require(MASS)
+require(glmmTMB)
 require(lme4)
 require(kableExtra)
 require(gt)
@@ -305,17 +307,47 @@ Calculating fitness this way, if all assignments were trios we need a fitness of
 
 All looks good!
 
+### 2015 together
+
+We also present 2015 outplants and reintros together as assignments suggest they freely spawn together and the report is interested in productivity above the damn generally, not just the productivity of outplants OR reintros.
+
+```{r}
+parents %>%
+  filter(year == 2015, type %in% c("reintro_above", "outplant")) %>%
+  summarise(mean_tlf = mean(tlf), sd_tlf = sd(tlf), count= n())
+
+parents %>%
+  filter(year == 2015, type %in% c("reintro_above", "outplant"), tlf == 0) %>%
+  summarise(zero_tlf_count= n())
+  
+parents %>%
+  filter(year == 2015, type %in% c("reintro_above", "outplant"), geno_sex == "M") %>%
+  summarise(mean_tlf = mean(tlf), sd_tlf = sd(tlf), count= n())
+
+parents %>%
+  filter(year == 2015, type %in% c("reintro_above", "outplant"), geno_sex == "F") %>%
+  summarise(mean_tlf = mean(tlf), sd_tlf = sd(tlf), count= n())
+  
+```
+
+
 ### 2015 comparisons
 
 We should probably build a more complex model here, but for now let's do a one-liner analysis to see if 2015 reintros above did significantly better than reintros below or outplants above.
 
 ```{r}
 
-summary(aov(data = filter(parents, year == 2015, type %in% c("outplant", "reintro_above", "reintro")), tlf ~ type))
-TukeyHSD(aov(data = filter(parents, year == 2015, type %in% c("outplant", "reintro_above", "reintro")), tlf ~ type))
+above_glm <- glm.nb(tlf ~  type, data = filter(parents, year == 2015, type %in% c("outplant", "reintro_above", "reintro")) )
+summary(above_glm)
+rootogram(above_glm)
+emmeans( above_glm, "type", type = "response")
+plot(emmeans( above_glm, "type", type = "response"))
+#TukeyHSD(aov(data = filter(parents, year == 2015, type %in% c("outplant", "reintro_above", "reintro")), tlf ~ type))
 ```
 
-NOR salmon had significantly higher fitness HOR salmon in the above Detroit habitat according to ANOVA, but not compared to NOR salmon reintroduced to below Big Cliff. Note this result should NOT be trusted, ANOVA on overdispersed count data is inappropriate. Need to build a GLM here. Will consider taking the time to do this after draft is complete. Also the factors are mispecified, rather than compare the three groups, the effects of origin and habitat should treated as separate factors
+Type is a significant predictor of fitness. 
+
+NOR salmon had significantly higher fitness HOR salmon in the above Detroit habitat, but not compared to NOR salmon reintroduced to below Big Cliff. Note this result should NOT be trusted, the factors are mispecified, rather than compare the three groups, the effects of origin and habitat should treated as separate factors. We should also consider the effects of other covariates and/or random effects.
 
 # Cohort Replacement Rates
 
@@ -509,6 +541,10 @@ rm(b)
 
 
 ```
+
+
+__2015 together__
+
 
 # Predictors of Fitness
 
@@ -709,7 +745,7 @@ My take is that this absolutely should not be included in the draft as a signifi
 ```{r}
 # data
 glm_2015_data <- parents %>%
-  filter(type == "outplant", year == "2015") %>%
+  filter(type %in% c("outplant", "reintro_above"), year == "2015") %>%
   select(date, geno_sex, location, tlf) %>%
   drop_na() %>%
   mutate(jday = as.numeric(format(date, "%j"))) %>%
@@ -789,7 +825,7 @@ In the previous GLM section I attempted to follow what had been done previously.
 ### Outline
 
 (1) EDA - let's look at the data in greater detail before jumping into modeling.  
-(2) Choose covariates - do some preliminary model fits and see if we're missing anything. For example in the mixed model approach where we combine year, we may see that the sex effect is actual due to skewed sex ratios, therefore we can assume that an important interaction term between sex and sex ratio of outplanting that year is missing from the model, leading to poor fit and overdispersion. Can we think of what might be missing from the model?  
+(2) Choose covariates - do some preliminary model fits and see if we're missing anything. For example in the mixed model approach where we combine year, we may see that the sex effect is actually due to skewed sex ratios, therefore we can assume that an important interaction term between sex and sex ratio of outplanting that year is missing from the model, leading to poor fit and overdispersion. Can we think of what might be missing from the model?  
 (3) Choose Distribution - fit full models of Poisson, Quasi-Poisson, NB, ZIP, ZINB and Hurdle models. Does this fix the overdispersion? Make the residuals look good?  
 (4) Model selection and validation on the final model.
 
@@ -1160,6 +1196,8 @@ Now we can check if the ZIP model solves the problem of overdispersion.
 
 
 ```{r}
+require(lmtest)
+
 lrtest( M2014_ZIP, M2014_ZINB)
 ```
 
@@ -1169,6 +1207,7 @@ This overwhelmingly suggests that the zero inflated NB is better than zero-infla
 # can't easily use the drop1 function here, let's conduct some LRTs 
 # we'll use the wald test do make some informed decisions
 M2014_ZINB4 <- zeroinfl(tlf ~ geno_sex  +poly(density,2) + geno_sex*poly(density,2) |1 , data = glm_2014_data, dist = "negbin") #jday worst in both sides of the model
+
 lrtest(M2014_ZIP4, M2014_ZINB4)
 
 
@@ -1259,87 +1298,116 @@ m <- glm_2011_data  %>%
 
 glm_2011_data  %<>%
   left_join(m) %>%
-  mutate(sex_ratio_rg = n_male_rg/n_female_rg)
+  mutate(sex_ratio_rg = n_male_rg/n_female_rg,
+         sex_ratio_rg_l = log(sex_ratio_rg))
 
 
-select(glm_2011_data, tlf, geno_sex, jday, density, sex_ratio_rg ) %>%
+select(glm_2011_data, tlf, geno_sex, jday, density, sex_ratio_rg_l ) %>%
   pairs(., lower.panel = panel.cor, diag.panel = panel.hist, upper.panel = panel.smooth2)
 ```
 
-There are only three release days and one release location in 2011. Since density is calculated per release site, per day, this means we may have strong collinearity. Let's check by fitting a model without interaction (below) and calculating VIFs
+There are only three release days and one release location in 2011. Since density and sex ratio is calculated per release site, per day, this means we may have strong collinearity. Let's check by fitting a model without interaction (below) and calculating VIFs
 
 ```{r}
-M2011_NB <- glm.nb(tlf ~ geno_sex   +jday + sex_ratio_rg  , data = glm_2011_data)
+M2011_NBx <- glm.nb(tlf ~ geno_sex   +jday + sex_ratio_rg_l  + density , data = glm_2011_data)
+
+M2011_NB <- glm.nb(tlf ~ geno_sex   +jday + sex_ratio_rg_l  , data = glm_2011_data)
 M2011_NBa <- glm.nb(tlf ~ geno_sex +density  +jday   , data = glm_2011_data)
-M2011_NBb <- glm.nb(tlf ~ geno_sex  +jday  + sex_ratio_rg  , data = glm_2011_data)
-summary(M2011_NB)  
-summary(M2011_NBa) 
-summary(M2011_NBb) 
+M2011_NBb <- glm.nb(tlf ~ geno_sex  +jday  + sex_ratio_rg_l  , data = glm_2011_data)
+#summary(M2011_NB)  
+#summary(M2011_NBa) 
+#summary(M2011_NBb) 
 ```
 
-Cannot fit the full model because of the strong collinearity between sex ratio density and date. So fit three models 
+Cannot fit the full model because of the strong collinearity between sex ratio, density and date. So fit four models, dropping one predictor from each. Is mutlicollinearity still an issue in the data after? 
 
 ```{r}
+#vif(M2011_NBx)
 vif(M2011_NB)
 vif(M2011_NBa)
 vif(M2011_NBb)
 ```
 
-No. We can expect reasonable standard errors of the effect estimates for a model that includes all three. Let's choose the most informative by AIC and not forget this when we interpret the results 
+No. We can expect reasonable standard errors of the main effect estimates for a model that includes all three. Let's choose the most informative by AIC and not forget that unincluded variable may be confounding the fit when we interpret the results 
 
 ```{r}
 AIC(M2011_NB, M2011_NBa, M2011_NBb)
 ```
 
-All fit the data equally well. We'll leave out sex ratio.
+All fit the data equally well. Which suggests we still have an issue with correlation. We'll leave out jday and density.
 
-First, we'll use a LRT and AIC to examine if it is worth including the non-linear effect of density or jday
+First, we'll use a LRT and AIC to examine if it is worth including the non-linear effect of sex ratio
 
 ```{r}
-M2011_NB <- glm.nb(tlf ~ geno_sex  +density  +jday +jday*geno_sex + density*geno_sex , data = glm_2011_data)
-M2011_NB2 <- glm.nb(tlf ~ geno_sex  +poly(density,2) + geno_sex*poly(density,2) +jday +jday*geno_sex, data = glm_2011_data)
-M2011_NB3 <- glm.nb(tlf ~ geno_sex  +density  +poly(jday,2) +poly(jday,2)*geno_sex + density*geno_sex , data = glm_2011_data)
-AIC(M2011_NB, M2011_NB2, M2011_NB3)
-anova(M2011_NB, M2011_NB2, M2011_NB3)
+
+```
+
+
+```{r}
+M2011_NB <- glm.nb(tlf ~ geno_sex  +density +density*geno_sex , data = glm_2011_data)
+M2011_NB3 <- glm.nb(tlf ~ geno_sex   +poly(density,2) +poly(density,2)*geno_sex , data = glm_2011_data)
+AIC(M2011_NB,  M2011_NB3)
+BIC(M2011_NB,  M2011_NB3)
+anova(M2011_NB,  M2011_NB3)
 #drop1(M2011_NB2, test = "Chisq")
 ```
 
-No, just use a linear effectf for both
+No, just use a linear effect
 
 Now we'll do model selection.
 
 ```{r}
 drop1(M2011_NB, test = "Chisq")
+drop1(glm.nb(tlf ~ geno_sex  +density , data = glm_2011_data), test = "Chisq")
 ```
 
-Interaction term of sex and density not significant so we'll refit with main effects only
-```{r}
-M2011_NB5 <- glm.nb(tlf ~ geno_sex  +density + jday+ geno_sex*jday, data = glm_2011_data)
-drop1(M2011_NB5, test = "Chisq")
-```
 
-Interaction term of sex and jday not significant nowso we'll refit with main effects only
-
-```{r}
-M2011_NB6 <- glm.nb(tlf ~ geno_sex  +density + jday, data = glm_2011_data)
-drop1(M2011_NB6, test = "Chisq")
-```
-
-LRT suggest no significant main effects. Let's go by Wald tests and see what happens.
+LRT suggests no significant effects.
 
 ```{r}
 summary(M2011_NB)
-summary(update(M2011_NB, .~. - geno_sex*density + geno_sex+density))
-summary(update(M2011_NB, .~. - geno_sex*density + geno_sex+density - jday*geno_sex +geno_sex +jday))
-summary(update(M2011_NB, .~. - geno_sex*density + geno_sex+density - jday*geno_sex +geno_sex ))
-summary(update(M2011_NB, .~. - geno_sex*density + geno_sex - jday*geno_sex +geno_sex ))
-summary(update(M2011_NB2, .~. - geno_sex*density + density))
+summary(glm.nb(tlf ~ geno_sex  +density , data = glm_2011_data))
+summary(glm.nb(tlf ~ 1, data = glm_2011_data))
 ```
 
-No significant effects by LRT or Wald tests. 
-__Summary__
+Wald tests agree
 
-In 2011 there were no significant effects. 
+__Summary__
+There were no significant effects.
+
+
+```{r}
+require(effects)
+
+#let's not use the effect package plotting tools and just get the effects
+
+#eff1 <- predictorEffect("sex_ratio_y_l", final_model, focal.levels = seq(-0.4,0.7,by = 0.1))e
+eff1 <- predictorEffect("sex_ratio_rg_l", M2011_NB)
+effdf <- as.data.frame(eff1)
+
+effdf %<>%
+  mutate(sex_ratio = exp(sex_ratio_rg_l))
+
+actual_means <- mm_data %>%
+  group_by(year, geno_sex, sex_ratio_rg_l) %>%
+  summarise(mean_tlf = mean(tlf))
+
+ggplot(data = effdf, aes(x = (sex_ratio_rg_l), y = fit, color = geno_sex))+ 
+  geom_line()
+
+
+ggplot(data = effdf, aes(x = (sex_ratio), y = fit, color = geno_sex))+ 
+  geom_line()+scale_x_continuous(trans = "log", n.breaks = 10) +
+  xlab( bquote(atop("Sex Ratio",(N[male]/N[female])))) +
+  geom_smooth( aes(ymin = lower, ymax = upper, fill = geno_sex, colour = geno_sex), stat = "identity") +
+  theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 3)) + scale_color_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) + scale_fill_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) +
+  geom_rug(data = mm_data, aes(x = sex_ratio_rg_l, y = NULL, color = NULL)) + 
+  geom_point(data = actual_means, aes(x = sex_ratio_rg_l, y = mean_tlf, color = geno_sex), alpha = 0.8, shape = 24, size = 2)
+  
+
+```
+
+
 
 ### 2012
 
@@ -1372,10 +1440,13 @@ m <- glm_2012_data  %>%
 
 glm_2012_data  %<>%
   left_join(m) %>%
-  mutate(sex_ratio_rg = n_male_rg/n_female_rg)
+  mutate(sex_ratio_rg = n_male_rg/n_female_rg) %>%
+  mutate(sex_ratio_rg_l = log(sex_ratio_rg))
 
 
-select(glm_2012_data, tlf, geno_sex, jday, location, density, sex_ratio_rg) %>%
+
+
+select(glm_2012_data, tlf, geno_sex, jday, location, density, sex_ratio_rg_l) %>%
   pairs(., lower.panel = panel.cor, diag.panel = panel.hist, upper.panel = panel.smooth2)
 
 str(glm_2012_data)
@@ -1384,37 +1455,51 @@ str(glm_2012_data)
 As with 2011, we need to simplify our model to avoid collinearity here. There are 2 release sites, but one was used on only a single day. We'll skip location to retain date, because location is so unbalanced.
 
 ```{r}
-M2012_NB <- glm.nb(tlf ~ geno_sex  +density  +jday  +sex_ratio_rg, data = glm_2012_data)
+
+M2012_NBx <- glm.nb(tlf ~ geno_sex  +density  +jday  +sex_ratio_rg_l + location, data = glm_2012_data)
+
+
+M2012_NB <- glm.nb(tlf ~ geno_sex  +density  +jday  +sex_ratio_rg_l, data = glm_2012_data)
 
 summary(M2012_NB)  
 vif(M2012_NB)
+vif(M2012_NBx)
 ```
 
 Looks good. 
 
 ```{r}
-M2012_NB <- glm.nb(tlf ~ geno_sex  +density +geno_sex*density +jday+ jday*geno_sex +sex_ratio_rg + sex_ratio_rg*geno_sex  , data = glm_2012_data)
+M2012_NB <- glm.nb(tlf ~ geno_sex  +density +geno_sex*density +jday+ jday*geno_sex +sex_ratio_rg_l + sex_ratio_rg_l*geno_sex  , data = glm_2012_data)
 
 summary(M2012_NB)  
 ```
 
 Much better. Now let's get to model selection. 
 
-First should we fit either jday or density as non-linear?
+First should we fit either jday, density, or sex ratio as non-linear?
 
 ```{r}
-M2012_NB_nlj <- glm.nb(tlf ~ geno_sex  +density +geno_sex*density +poly(jday,2)+poly(jday,2)*geno_sex + sex_ratio_rg +sex_ratio_rg*geno_sex , data = glm_2012_data)
+M2012_NB_nlj <- glm.nb(tlf ~ geno_sex  +density +geno_sex*density +poly(jday,2)+poly(jday,2)*geno_sex + sex_ratio_rg_l +sex_ratio_rg_l*geno_sex , data = glm_2012_data)
 
-M2012_NB_nld <- glm.nb(tlf ~ geno_sex  +poly(density,2) +geno_sex*poly(density,2) +jday +jday*geno_sex + sex_ratio_rg +sex_ratio_rg*geno_sex  , data = glm_2012_data)
+M2012_NB_nld <- glm.nb(tlf ~ geno_sex  +poly(density,2) +geno_sex*poly(density,2) +jday +jday*geno_sex + sex_ratio_rg_l +sex_ratio_rg_l*geno_sex  , data = glm_2012_data)
 
-M2012_NB_nldj <- glm.nb(tlf ~ geno_sex  +poly(density,2) +geno_sex*poly(density,2) +poly(jday,2) +poly(jday,2)*geno_sex + sex_ratio_rg +sex_ratio_rg*geno_sex  , data = glm_2012_data)
+M2012_NB_nldj <- glm.nb(tlf ~ geno_sex  +poly(density,2) +geno_sex*poly(density,2) +poly(jday,2) +poly(jday,2)*geno_sex + sex_ratio_rg_l +sex_ratio_rg_l*geno_sex  , data = glm_2012_data)
 
-AIC(M2012_NB, M2012_NB_nld, M2012_NB_nlj, M2012_NB_nldj)
-anova(M2012_NB, M2012_NB_nld, M2012_NB_nlj, test = "Chisq")
+M2012_NB_nldjs <- glm.nb(tlf ~ geno_sex  +poly(density,2) +geno_sex*poly(density,2) +poly(jday,2) +poly(jday,2)*geno_sex + poly(sex_ratio_rg_l,2) + poly(sex_ratio_rg_l,2)*geno_sex  , data = glm_2012_data)
+
+M2012_NB_nlds <- glm.nb(tlf ~ geno_sex  +poly(density,2) +geno_sex*poly(density,2) +jday +jday*geno_sex + poly(sex_ratio_rg_l,2) + poly(sex_ratio_rg_l,2)*geno_sex  , data = glm_2012_data)
+
+M2012_NB_nljs <- glm.nb(tlf ~ geno_sex  +density +geno_sex*density +poly(jday,2) +poly(jday,2)*geno_sex + poly(sex_ratio_rg_l,2) + poly(sex_ratio_rg_l,2)*geno_sex  , data = glm_2012_data)
+
+
+AIC(M2012_NB, M2012_NB_nld, M2012_NB_nlj, M2012_NB_nldj, M2012_NB_nldjs, M2012_NB_nljs)
+BIC(M2012_NB, M2012_NB_nld, M2012_NB_nlj, M2012_NB_nldj, M2012_NB_nldjs, M2012_NB_nljs)
+
+#anova(M2012_NB, M2012_NB_nld, M2012_NB_nlj, test = "Chisq")
 
 ```
 
-Fit both as linear. 
+Fit all as linear. 
 
 Now let's move on to model selection.
 
@@ -1422,16 +1507,16 @@ Now let's move on to model selection.
 drop1(M2012_NB, test = "Chisq")
 ```
 
-Interaction terms not significant,let's refit with main effects and run drop1 again.
+Interaction terms not significant,let's drop least sig interaction and refit with main effects
 
 ```{r}
-M2012_NB2 <- glm.nb(tlf ~ geno_sex  +density +jday+ sex_ratio_rg +geno_sex*density + geno_sex*jday , data = glm_2012_data)
+M2012_NB2 <- glm.nb(tlf ~ geno_sex  +density +jday+ sex_ratio_rg_l +geno_sex*density + geno_sex*jday , data = glm_2012_data)
 drop1(M2012_NB2, test = "Chisq")
 
-M2012_NB3 <- glm.nb(tlf ~ geno_sex  +density +jday+ sex_ratio_rg +geno_sex*density  , data = glm_2012_data)
+M2012_NB3 <- glm.nb(tlf ~ geno_sex  +density +jday+ sex_ratio_rg_l +geno_sex*density  , data = glm_2012_data)
 drop1(M2012_NB3, test = "Chisq")
 
-M2012_NB4 <- glm.nb(tlf ~ geno_sex  +density +jday+ sex_ratio_rg , data = glm_2012_data)
+M2012_NB4 <- glm.nb(tlf ~ geno_sex  +density +jday+ sex_ratio_rg_l , data = glm_2012_data)
 drop1(M2012_NB4, test = "Chisq")
 ```
 
@@ -1441,13 +1526,13 @@ Let's look by Wald.
 
 ```{r}
 summary(M2012_NB)
-summary(glm.nb(tlf ~ geno_sex +sex_ratio_rg +density +jday + jday*geno_sex + geno_sex*density , data = glm_2012_data))
-summary(glm.nb(tlf ~ geno_sex +sex_ratio_rg +density +jday + geno_sex*density , data = glm_2012_data))
-summary(glm.nb(tlf ~ geno_sex +sex_ratio_rg +density +jday , data = glm_2012_data))
-summary(glm.nb(tlf ~ sex_ratio_rg +density +jday , data = glm_2012_data))
-summary(glm.nb(tlf ~ sex_ratio_rg +density , data = glm_2012_data))
+summary(glm.nb(tlf ~ geno_sex +sex_ratio_rg_l +density +jday + jday*geno_sex + geno_sex*density , data = glm_2012_data))
+summary(glm.nb(tlf ~ geno_sex +sex_ratio_rg_l +density +jday + geno_sex*density , data = glm_2012_data))
+summary(glm.nb(tlf ~ geno_sex +sex_ratio_rg_l +density +jday , data = glm_2012_data))
+summary(glm.nb(tlf ~ sex_ratio_rg_l +density +jday , data = glm_2012_data))
+summary(glm.nb(tlf ~ sex_ratio_rg_l +density , data = glm_2012_data))
 summary(glm.nb(tlf ~ density , data = glm_2012_data))
-M2014_NB_4 <- glm.nb(tlf ~ density , data = glm_2012_data)
+M2012_NB_4 <- glm.nb(tlf ~ density , data = glm_2012_data)
 
 ```
 
@@ -1475,8 +1560,34 @@ anova(M2012_NB_null, M2012_NB_4)
 
 ```{r}
 summary(M2012_NB_4)
+
+
 ```
 
+For the results text, let's predict TLF at minimum, median and maximum density, we'll also make a nice plot
+
+```{r}
+pe_d_2012 <- as.data.frame(predictorEffect("density", M2012_NB_4))
+pe_d_2012 %>%
+  filter(density %in% c(min(glm_2012_data$density), median(glm_2012_data$density), max(glm_2012_data$density)))
+
+
+actual_means <- glm_2012_data %>%
+  group_by(density) %>%
+  summarise(mean_tlf = mean(tlf))
+
+ggplot(data = pe_d_2012, aes(x = (density), y = fit))+ 
+  geom_line() +
+  xlab("Release Group Density") +
+  geom_smooth( aes(ymin = lower, ymax = upper), stat = "identity") +
+  theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 3)) +
+  geom_rug(data = glm_2012_data, aes(x = density, y = NULL)) + 
+  geom_point(data = actual_means, aes(x = density, y = mean_tlf), alpha = 0.8, shape = 24, size = 2)+ geom_point(aes(x = 46, y = 1.3913043), color = "red", shape  = 24, size = 2)+ggtitle("2012 Predictors of Fitness - Density")
+  
+#  annotate(geom="text", x=45, y=1, label="Single Day Release\nat Breitenbush")
+
+```
+Figure Caption: Release group density vs predicted (line and 95% confidence interval) and mean empirical TLF (triangle). Red triangle highlights the observations made from salmon released at Breitenbush River on a single day.
 
 __Summary__
 The final model fit the better signficantly better than a null model including only an intercept (p= 0.002, LRT). After model selection by testing the impact of individual predictors on fit with LRT and backward stepwise selection using Wald tests, only a single predictor was included in the final model, density. Density had a positive effect on fitness (0.024 +- 0.007, log scale).  
@@ -1515,10 +1626,11 @@ m <- glm_2013_data  %>%
 
 glm_2013_data  %<>%
   left_join(m) %>%
-  mutate(sex_ratio_rg = n_male_rg/n_female_rg)
+  mutate(sex_ratio_rg = n_male_rg/n_female_rg,
+         sex_ratio_rg_l = log(sex_ratio_rg))
 
 
-select(glm_2013_data, tlf, geno_sex, jday, location, density, sex_ratio_rg) %>%
+select(glm_2013_data, tlf, geno_sex, jday, location, density, sex_ratio_rg_l) %>%
   pairs(., lower.panel = panel.cor, diag.panel = panel.hist, upper.panel = panel.smooth2)
 
 str(glm_2013_data)
@@ -1528,7 +1640,7 @@ Once again there are systematic relationships between some the variables. Of the
 
 
 ```{r}
-M2013_NB <- glm.nb(tlf ~ geno_sex+location  +density  +jday + sex_ratio_rg, data = glm_2013_data)
+M2013_NB <- glm.nb(tlf ~ geno_sex+location  +density  +jday + sex_ratio_rg_l, data = glm_2013_data)
 
 summary(M2013_NB)  
 vif(M2013_NB)
@@ -1537,8 +1649,8 @@ vif(M2013_NB)
 First, let's get those VIFs down to something more acceptable. We'll use AIC and LRTs to determine which variable is better to include.
 
 ```{r}
-M2013_NB2 <- glm.nb(tlf ~ geno_sex  +density +jday +sex_ratio_rg  , data = glm_2013_data)
-M2013_NB3 <- glm.nb(tlf ~ geno_sex+location  +density  +sex_ratio_rg  , data = glm_2013_data)
+M2013_NB2 <- glm.nb(tlf ~ geno_sex  +density +jday +sex_ratio_rg_l  , data = glm_2013_data)
+M2013_NB3 <- glm.nb(tlf ~ geno_sex+location  +density  +sex_ratio_rg_l  , data = glm_2013_data)
 AIC(M2013_NB2, M2013_NB3)
 vif(M2013_NB2)
 vif(M2013_NB3)
@@ -1547,51 +1659,148 @@ lrtest(M2013_NB2, M2013_NB3)
 
 The models without location and without date were equivalently informative, and neither demonstrated further collinearity problems.
 
-Let's fit with location instead of jday, but note that this is somewhat arbitrary and that any effect of location that we find needs to be considered in light of the relationship between these variables. 
+Let's fit with jday instead of location, for consistency, but note that this is somewhat arbitrary and that any effect of location that we find needs to be considered in light of the relationship between these variables. 
 
 Now let's check to see if need to fit a non-linear effect of density before finalizing model selection.
 
 ```{r}
-M2013_NB4 <- glm.nb(tlf ~ geno_sex+location  +poly(density,2) +geno_sex*poly(density,2)+sex_ratio_rg+sex_ratio_rg*geno_sex  , data = glm_2013_data)
-M2013_NB5 <- glm.nb(tlf ~ geno_sex+location  +density +geno_sex*density +sex_ratio_rg+sex_ratio_rg*geno_sex  , data = glm_2013_data)
+M2013_NB4 <- glm.nb(tlf ~ geno_sex+jday  +poly(density,2) +geno_sex*poly(density,2)+sex_ratio_rg_l+sex_ratio_rg_l*geno_sex +geno_sex*jday  , data = glm_2013_data)
 
-AIC(M2013_NB4, M2013_NB5)
+M2013_NB5 <- glm.nb(tlf ~ geno_sex+ density + jday +geno_sex*density +sex_ratio_rg_l+sex_ratio_rg_l*geno_sex +geno_sex*jday , data = glm_2013_data)
+
+M2013_NB6 <- glm.nb(tlf ~ geno_sex+density +poly(jday,2) +geno_sex*density +sex_ratio_rg_l+sex_ratio_rg_l*geno_sex  +geno_sex*poly(jday,2) , data = glm_2013_data)
+
+M2013_NB7 <- glm.nb(tlf ~ geno_sex+poly(density,2) +poly(jday,2) +geno_sex*poly(density,2) +sex_ratio_rg_l+sex_ratio_rg_l*geno_sex  +geno_sex*poly(jday,2) , data = glm_2013_data)
+
+M2013_NB8 <- glm.nb(tlf ~ geno_sex+ density + jday +geno_sex*density +poly(sex_ratio_rg_l,2)+poly(sex_ratio_rg_l,2)*geno_sex +geno_sex*jday , data = glm_2013_data)
+
+M2013_NB9 <- glm.nb(tlf ~ geno_sex+ poly(density,2) + jday +geno_sex*poly(density,2) +poly(sex_ratio_rg_l,2)+poly(sex_ratio_rg_l,2)*geno_sex +geno_sex*jday , data = glm_2013_data)
+
+M2013_NB10 <- glm.nb(tlf ~ geno_sex+ density + poly(jday,2) +geno_sex*density +poly(sex_ratio_rg_l,2)+poly(sex_ratio_rg_l,2)*geno_sex +geno_sex*poly(jday,2) , data = glm_2013_data)
+
+M2013_NB11 <- glm.nb(tlf ~ geno_sex+ poly(density,2) + poly(jday,2) +geno_sex*poly(density,2) +poly(sex_ratio_rg_l,2)+poly(sex_ratio_rg_l,2)*geno_sex +geno_sex*poly(jday,2) , data = glm_2013_data)
+
+AIC( M2013_NB4, M2013_NB5, M2013_NB6,  M2013_NB7, M2013_NB8, M2013_NB9, M2013_NB10, M2013_NB11)
 anova(M2013_NB4, M2013_NB5)
 ```
 
-Nope a linear effect is sufficient. Moving on to model selection.
+Including density as non-linear is a very marginally significant improvement (delta AIC = 2.3, LRT p-value = 0.03) Let's fit it.
+
 
 First let's use the drop1 command (LRTs for each effect)
 
 ```{r}
-drop1(M2013_NB5, test = "Chisq")
+drop1(M2013_NB4, test = "Chisq")
 ```
 
 Let's refit without the interaction.
 ```{r}
-drop1((glm.nb(tlf ~ geno_sex+location  +density +geno_sex*density +sex_ratio_rg  , data = glm_2013_data)), test = "Chisq")
-drop1((glm.nb(tlf ~ geno_sex+location  +density  +sex_ratio_rg  , data = glm_2013_data)), test = "Chisq")
+drop1((glm.nb(tlf ~ geno_sex+jday  +poly(density,2) +geno_sex*poly(density,2) + geno_sex*jday +sex_ratio_rg_l  , data = glm_2013_data)), test = "Chisq")
+
+drop1((glm.nb(tlf ~ geno_sex+jday  +poly(density,2)  + geno_sex*jday +sex_ratio_rg_l  , data = glm_2013_data)), test = "Chisq")
+
+drop1((glm.nb(tlf ~ geno_sex+jday  +poly(density,2)  +sex_ratio_rg  , data = glm_2013_data)), test = "Chisq")
 ```
 
-No significant effect by LRT.
+Significant effects of release group sex ratio, density and day.
 
 Now backward stepwise by Wald
 
 ```{r}
-summary(M2013_NB5)
-summary(glm.nb(tlf ~ geno_sex+location  +density +density*geno_sex +sex_ratio_rg , data = glm_2013_data))
-summary(glm.nb(tlf ~ geno_sex+location  +density +sex_ratio_rg , data = glm_2013_data))
-summary(glm.nb(tlf ~ geno_sex +density +sex_ratio_rg , data = glm_2013_data))
-summary(glm.nb(tlf ~ geno_sex +sex_ratio_rg , data = glm_2013_data))
-summary(glm.nb(tlf ~ geno_sex , data = glm_2013_data))
+summary(M2013_NB4)
+summary(glm.nb(tlf ~ geno_sex+jday  +poly(density,2) +poly(density,2)*geno_sex +sex_ratio_rg_l + geno_sex*sex_ratio_rg_l , data = glm_2013_data))
+
+summary(glm.nb(tlf ~ geno_sex+jday  +poly(density,2) +poly(density,2)*geno_sex +sex_ratio_rg_l  , data = glm_2013_data))
+
+summary(glm.nb(tlf ~ geno_sex+jday  +poly(density,2)  +sex_ratio_rg_l  , data = glm_2013_data))
+
+summary(glm.nb(tlf ~ jday  +poly(density,2)  +sex_ratio_rg_l  , data = glm_2013_data))
+```
+
+
+Same result
+
+```{r}
+glm2013_final <- (glm.nb(tlf ~ jday  +poly(density,2)  +sex_ratio_rg_l  , data = glm_2013_data))
 
 ```
 
-No significant effects.
 
 __Summary__ 
 
-No significant effects after model selection in 2013
+In 2013 there was a significant effect of release day, release group sex ratio and density. Let's plot the effects.
+
+```{r}
+require(emmeans)
+day_effect <- emmeans(glm2013_final, type = "response" )
+day_effect
+plot(day_effect)+theme_classic()+xlab("Estimated Marginal Mean TLF\nwith 95% CIs")+ylab("day")
+```
+
+
+```{r}
+require(effects)
+
+#let's not use the effect package plotting tools and just get the effects
+
+#eff1 <- predictorEffect("sex_ratio_rg_l", final_model, focal.levels = seq(-0.4,0.7,by = 0.1))
+eff_sr <- predictorEffect("sex_ratio_rg_l", glm2013_final)
+eff_sr_df <- as.data.frame(eff_sr)
+
+eff_sr_df %<>%
+  mutate(sex_ratio = exp(sex_ratio_rg_l))
+
+actual_means <- glm_2013_data %>%
+  group_by( sex_ratio_rg) %>%
+  summarise(mean_tlf = mean(tlf))
+
+ggplot(data = eff_sr_df, aes(x = (sex_ratio), y = fit))+ 
+  geom_line()+scale_x_continuous(trans = "log", breaks = c(0.5, 0.75, 1, 1.5, 2, 2.5, 3)) +
+  xlab( bquote(atop("Sex Ratio",(N[male]/N[female])))) +
+  geom_smooth( aes(ymin = lower, ymax = upper), stat = "identity") +
+  theme_bw()+ylab("TLF") +
+  geom_rug(data = glm_2013_data, aes(x = sex_ratio_rg, y = NULL, color = NULL)) + 
+  geom_point(data = actual_means, aes(x = sex_ratio_rg, y = mean_tlf), alpha = 0.8, shape = 24, size = 2)+ggtitle("2013 Predictors of Fitness - Release Group Sex Ratio")
+  
+
+#density
+eff_d <- predictorEffect("density", glm2013_final)
+eff_d_df <- as.data.frame(eff_d)
+
+
+actual_means <- glm_2013_data %>%
+  group_by( density) %>%
+  summarise(mean_tlf = mean(tlf))
+
+ggplot(data = eff_d_df, aes(x = (density), y = fit))+ 
+  geom_line() +
+  xlab("Release Group Density") +
+  geom_smooth( aes(ymin = lower, ymax = upper), stat = "identity") +
+  theme_bw()+ylab("TLF") +
+  geom_point(data = actual_means, aes(x = density, y = mean_tlf), alpha = 0.8, shape = 24, size = 2) +
+  geom_rug(data = glm_2013_data, aes(x = density, y = NULL, color = NULL)) +
+  ggtitle("2013 Predictors of Fitness - Density")
+  
+
+#day
+eff_j <- predictorEffect("jday", glm2013_final)
+eff_j_df <- as.data.frame(eff_j)
+
+
+actual_means <- glm_2013_data %>%
+  group_by( jday) %>%
+  summarise(mean_tlf = mean(tlf))
+
+ggplot(data = eff_j_df, aes(x = (jday), y = fit))+ 
+  geom_line() +
+  xlab("Julian Day of Release") +
+  geom_smooth( aes(ymin = lower, ymax = upper), stat = "identity") +
+  theme_bw()+ylab("TLF") +
+  geom_point(data = actual_means, aes(x = jday, y = mean_tlf), alpha = 0.8, shape = 24, size = 2) + 
+  geom_rug(data = glm_2013_data, aes(x = jday, y = NULL, color = NULL)) + 
+  ggtitle("2013 Predictors of Fitness - Release Day")
+```
+
 
 
 ### 2014
@@ -1624,20 +1833,21 @@ m <- glm_2014_data  %>%
 
 glm_2014_data  %<>%
   left_join(m) %>%
-  mutate(sex_ratio_rg = n_male_rg/n_female_rg)
+  mutate(sex_ratio_rg = n_male_rg/n_female_rg,
+         sex_ratio_rg_l = log(sex_ratio_rg))
 
 
-select(glm_2014_data, tlf, geno_sex, jday, location, density, sex_ratio_rg) %>%
+select(glm_2014_data, tlf, geno_sex, jday, location, density, sex_ratio_rg_l) %>%
   pairs(., lower.panel = panel.cor, diag.panel = panel.hist, upper.panel = panel.smooth2)
 
 str(glm_2014_data)
 ```
 
-Once again location and jday are confounded. There is a location that is used very early in the outplanting schedule and then never again. We'll take the same approach as in 2013, and fit whichever variable is most informative in the model, but will need to remember this when interpreting effects.
+Once again location and jday are confounded. There is a location that is used early in the outplanting schedule and then never again. We'll take the same approach as in 2013, and exclude location, but will need to remember this when interpreting effects.
 
 
 ```{r}
-M2014_NB <- glm.nb(tlf ~ geno_sex+location  +density  +jday+ sex_ratio_rg , data = glm_2014_data)
+M2014_NB <- glm.nb(tlf ~ geno_sex+location  +density  +jday+ sex_ratio_rg_l , data = glm_2014_data)
 
 summary(M2014_NB)  
 vif(M2014_NB)
@@ -1645,7 +1855,7 @@ vif(M2014_NB)
 
 
 ```{r}
-M2014_NBb <- glm.nb(tlf ~ geno_sex +density  +jday+ sex_ratio_rg , data = glm_2014_data)
+M2014_NBb <- glm.nb(tlf ~ geno_sex +density  +jday+ sex_ratio_rg_l , data = glm_2014_data)
 
 summary(M2014_NBb)  
 vif(M2014_NBb)
@@ -1653,27 +1863,33 @@ vif(M2014_NBb)
 
 
 ```{r}
-M2014_NB2 <- glm.nb(tlf ~ geno_sex  +density  +jday + geno_sex*density + geno_sex*jday +sex_ratio_rg +sex_ratio_rg*geno_sex, data = glm_2014_data)
-M2014_NB3 <- glm.nb(tlf ~ geno_sex+location  +density + geno_sex*density  +sex_ratio_rg +sex_ratio_rg*geno_sex , data = glm_2014_data)
+M2014_NB2 <- glm.nb(tlf ~ geno_sex  +density  +jday + geno_sex*density + geno_sex*jday +sex_ratio_rg_l +sex_ratio_rg_l*geno_sex, data = glm_2014_data)
+M2014_NB3 <- glm.nb(tlf ~ geno_sex+location  +density + geno_sex*density  +sex_ratio_rg_l +sex_ratio_rg_l*geno_sex , data = glm_2014_data)
 AIC(M2014_NB2, M2014_NB3)
 anova(M2014_NB2, M2014_NB3)
 ```
 
 In this case, dropping location allows for a model that provides a better fit to the data.
 
-Now let's check to see if need to fit a non-linear effect of density before finalizing model selection.
+Now let's check to see if need to fit a non-linear effect of density, jday or sex ratio before finalizing the start of model selection.
 
 ```{r}
-M2014_NB4 <- glm.nb(tlf ~ geno_sex  +density  +poly(jday,2) + geno_sex*density + geno_sex*poly(jday,2)+sex_ratio_rg +sex_ratio_rg*geno_sex, data = glm_2014_data)
-M2014_NB5 <- glm.nb(tlf ~ geno_sex  +poly(density,2)  +jday + geno_sex*poly(density,2) + geno_sex*jday+sex_ratio_rg +sex_ratio_rg*geno_sex, data = glm_2014_data)
-M2014_NB6 <- glm.nb(tlf ~ geno_sex  +poly(density,2)  +poly(jday,2) + geno_sex*poly(density,2) + geno_sex*poly(jday,2)+sex_ratio_rg +sex_ratio_rg*geno_sex, data = glm_2014_data)
+M2014_NB4 <- glm.nb(tlf ~ geno_sex  +density  +poly(jday,2) + geno_sex*density + geno_sex*poly(jday,2)+sex_ratio_rg_l +sex_ratio_rg_l*geno_sex, data = glm_2014_data)
+M2014_NB5 <- glm.nb(tlf ~ geno_sex  +poly(density,2)  +jday + geno_sex*poly(density,2) + geno_sex*jday+sex_ratio_rg_l +sex_ratio_rg_l*geno_sex, data = glm_2014_data)
+M2014_NB6 <- glm.nb(tlf ~ geno_sex  +poly(density,2)  +poly(jday,2) + geno_sex*poly(density,2) + geno_sex*poly(jday,2)+sex_ratio_rg_l +sex_ratio_rg_l*geno_sex, data = glm_2014_data)
+M2014_NB7 <- glm.nb(tlf ~ geno_sex  +poly(density,2)  +poly(jday,2) + geno_sex*poly(density,2) + geno_sex*poly(jday,2)+poly(sex_ratio_rg_l,2) +poly(sex_ratio_rg_l,2)*geno_sex, data = glm_2014_data)
+M2014_NB8 <- glm.nb(tlf ~ geno_sex  +density  +poly(jday,2) + geno_sex*density + geno_sex*poly(jday,2)+poly(sex_ratio_rg_l,2) +poly(sex_ratio_rg_l,2)*geno_sex, data = glm_2014_data)
+M2014_NB9 <- glm.nb(tlf ~ geno_sex  +poly(density,2)  +jday + geno_sex*poly(density,2) + geno_sex*jday+poly(sex_ratio_rg_l,2) +poly(sex_ratio_rg_l,2)*geno_sex, data = glm_2014_data)
+M2014_NB10 <- glm.nb(tlf ~ geno_sex  +density  +jday + geno_sex*density + geno_sex*jday+poly(sex_ratio_rg_l,2) +poly(sex_ratio_rg_l,2)*geno_sex, data = glm_2014_data)
 
-AIC(M2014_NB2,M2014_NB4, M2014_NB5, M2014_NB6)
+
+AIC(M2014_NB2,M2014_NB4, M2014_NB5, M2014_NB6, M2014_NB7, M2014_NB8, M2014_NB9, M2014_NB10)
+BIC(M2014_NB2,M2014_NB4, M2014_NB5, M2014_NB6, M2014_NB7, M2014_NB8, M2014_NB9, M2014_NB10)
 anova(M2014_NB2, M2014_NB4, M2014_NB5, M2014_NB6)
 anova(M2014_NB2, M2014_NB5)
 ```
 
-Fitting density as a quadratic only provides a marginal improvement to the data, will keep linear.
+Fitting density as a quadratic only provides a marginal improvement to the data, all others make it worse. Will keep linear.
 
 Let's do model selection.
 
@@ -1683,10 +1899,10 @@ drop1(M2014_NB2, test ="Chisq")
 
 Let's refit without the insignficant interaction.
 ```{r}
-M2014_NB4 <- glm.nb(tlf ~ geno_sex  +density  +jday + geno_sex*density + geno_sex*sex_ratio_rg , data = glm_2014_data)
+M2014_NB4 <- glm.nb(tlf ~ geno_sex  +density  +jday + sex_ratio_rg_l+ geno_sex*density + geno_sex*sex_ratio_rg_l , data = glm_2014_data)
 drop1(M2014_NB4, test = "Chisq")
 
-M2014_NB4 <- glm.nb(tlf ~ geno_sex  +density  +jday + geno_sex*density  , data = glm_2014_data)
+M2014_NB4 <- glm.nb(tlf ~ geno_sex  +density  +jday + sex_ratio_rg_l+ geno_sex*density  , data = glm_2014_data)
 drop1(M2014_NB4, test = "Chisq")
 ```
 
@@ -1694,14 +1910,15 @@ LRT suggests a final model with sex, density and their interaction.
 
 
 ```{r}
-summary(glm.nb(tlf ~ geno_sex  +density  +jday + geno_sex*density + jday*geno_sex +sex_ratio_rg + sex_ratio_rg*geno_sex  , data = glm_2014_data))
+summary(glm.nb(tlf ~ geno_sex  +density  +jday + geno_sex*density + jday*geno_sex +sex_ratio_rg_l + sex_ratio_rg_l*geno_sex  , data = glm_2014_data))
 
-summary(glm.nb(tlf ~ geno_sex  +density  +jday  + jday*geno_sex +sex_ratio_rg + sex_ratio_rg*geno_sex  , data = glm_2014_data))
+summary(glm.nb(tlf ~ geno_sex  +density  +jday + geno_sex*density  +sex_ratio_rg_l + sex_ratio_rg_l*geno_sex  , data = glm_2014_data))
 
-summary(glm.nb(tlf ~ geno_sex  +density  +jday  + jday*geno_sex +sex_ratio_rg  , data = glm_2014_data))
+summary(glm.nb(tlf ~ geno_sex  +density  +jday + geno_sex*density  +sex_ratio_rg_l   , data = glm_2014_data))
 
+summary(glm.nb(tlf ~ geno_sex  +density + geno_sex*density  +sex_ratio_rg_l   , data = glm_2014_data))
 
-summary(update(M2014_NB4, .~. -jday))
+summary(glm.nb(tlf ~ geno_sex  +density + geno_sex*density     , data = glm_2014_data))
 ```
 
 Backward stepwise by Wald agrees. 
@@ -1709,24 +1926,14 @@ Backward stepwise by Wald agrees.
 Now let's examine the final model fit. 
 
 ```{r}
-M2014_NB5 <- update(M2014_NB4, .~. -jday)
+M2014_NB5 <- glm.nb(tlf ~ geno_sex  +density + geno_sex*density , data = glm_2014_data)
 plot(M2014_NB5)
 qqrplot(M2014_NB5)
 rootogram(M2014_NB5)
 simulateResiduals(M2014_NB5, plot = TRUE)
 ```
 
-A much better looking fit. For interest, let's see how including the additional covariate and following model selection improved the fit compared to the approach used before.
-
-```{r}
-plot(glm_2014_full)
-qqrplot(glm_2014_full)
-rootogram(glm_2014_full)
-simulateResiduals(glm_2014_full, plot = TRUE)
-AIC(glm_2014_full, M2014_NB4)
-BIC(glm_2014_full, M2014_NB4)
-```
-Not too different looking in the figures, but a substantial improvement in AIC and BIC
+A much better looking fit. An outlier issue shows up with th e simulated residuals, but it is only marginally significant and difficult to see any effects of outliers in the leverage plot or qqplots. 
 
 Let's summarise the final model and discuss the results:
 ```{r}
@@ -1740,43 +1947,36 @@ The final model includes a significant effect of sex, density and their interact
 Some things jump out here to discuss later: density effects estimated form individual outplantings suggest that fish s
 
 ```{r}
- emmeans::emmip(M2014_NB5,  geno_sex ~ density, cov.reduce = range, type = "scale", CIs = TRUE)+ylab("predicted response in reponse scale \n (tlf, not log(tlf)")+theme_classic()
-ggplot(glm_2014_data)+geom_histogram(aes(x = density))+theme_classic()
-```
+ #emmeans::emmip(M2014_NB5,  geno_sex ~ density, cov.reduce = range, type = "scale", CIs = TRUE)+ylab("predicted response in reponse scale \n (tlf, not log(tlf)")+theme_classic()
+#ggplot(glm_2014_data)+geom_histogram(aes(x = density))+theme_classic()
 
-It's easy to see how these models can be used to improve outplanting operations once you start to put these figures together. One thing to explore down the road with mixed modeling and/or comparing paramter estimates across years is whether outplant fitness can be improved through controlling density and sex ratios. This also suggests that sex ratios at individual outplanting events might influence fitness. Perhaps we shold refit models with an additional covariate.  
 
-Let's keep exploring for a bit. 
+#let's not use the effect package plotting tools and just get the effects
 
-```{r}
-#build release group sex ratio variable
-f <- glm_2014_data %>% 
-  filter(geno_sex == "F") %>%
-  group_by(location, jday) %>% 
-  summarise(n_female = n()) 
+#eff1 <- predictorEffect("sex_ratio_rg_l", final_model, focal.levels = seq(-0.4,0.7,by = 0.1))
+eff1 <- predictorEffect("density", M2014_NB5)
+effdf <- as.data.frame(eff1)
 
-glm_2014_data %<>%
-  left_join(f)
 
-m <- glm_2014_data %>% 
-  filter(geno_sex == "M") %>%
-  group_by(location, jday) %>% 
-  summarise(n_male = n()) 
+actual_means <- glm_2014_data %>%
+  group_by(density, geno_sex) %>%
+  summarise(mean_tlf = mean(tlf))
 
-glm_2014_data %<>%
-  left_join(m) %>%
-  mutate(sex_ratio = n_female/n_male)
+ggplot(data = effdf, aes(x = (density), y = fit, color = geno_sex))+ 
+  geom_line() +
+  xlab("Density") +
+  geom_smooth( aes(ymin = lower, ymax = upper, fill = geno_sex, colour = geno_sex), stat = "identity") +
+  theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 0.9)) + scale_color_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) + scale_fill_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) +
+  geom_rug(data = glm_2014_data, aes(x = density, y = NULL, color = NULL))+ggtitle("2014 Predictors of Fitness - Sex * Density Interaction")
+  
 
-ggplot(data = glm_2014_data)+geom_histogram(aes(x = sex_ratio))+xlab("n females / n males")
-
-M2014_sr <- glm.nb(tlf ~ sex_ratio + geno_sex + density + sex_ratio*density + density*geno_sex, data = glm_2014_data)
-summary(M2014_sr)
-drop1(M2014_sr, test = "Chisq")
-
-#interaction of sex ratio and density not significant, fit again
-M2014_sr2 <- glm.nb(tlf ~ sex_ratio + geno_sex + density  + density*geno_sex, data = glm_2014_data)
-summary(M2014_sr2)
-drop1(M2014_sr2, test = "Chisq")
+ggplot(data = effdf, aes(x = (density), y = fit, color = geno_sex))+ 
+  geom_line() +
+  xlab("Density") +
+  geom_smooth( aes(ymin = lower, ymax = upper, fill = geno_sex, colour = geno_sex), stat = "identity") +
+  theme_bw()+ylab("TLF") + scale_color_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) + scale_fill_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) +
+  #geom_rug(data = glm_2014_data, aes(x = density, y = NULL, color = NULL))  +
+  geom_jitter(data = glm_2014_data, aes(x = density, y = tlf, color = geno_sex, alpha = 0.5))
 
 ```
 
@@ -1786,11 +1986,18 @@ drop1(M2014_sr2, test = "Chisq")
 ```{r}
 glm_2015_data %>%
   group_by(jday, location) %>%
-  summarise(density = n())
+  summarise(density = n()) %>%
+  ungroup()
+
+glm_2015_data %<>%
+  mutate(location = case_when(location == "dry cr" ~ "dry creek",
+                              TRUE ~ as.character(location))) %>%
+  mutate(location = as.factor(location))
 
 d2015 <- glm_2015_data %>%
   group_by(jday, location) %>%
   summarise(density = n())
+
 
 glm_2015_data %<>%
   left_join(d2015)
@@ -1812,82 +2019,152 @@ m <- glm_2015_data  %>%
 
 glm_2015_data  %<>%
   left_join(m) %>%
-  mutate(sex_ratio_rg = n_male_rg/n_female_rg)
+  mutate(sex_ratio_rg = n_male_rg/n_female_rg,
+         sex_ratio_rg_l = log(sex_ratio_rg))
 
+# there are 8 individuals from a release group with no males causing issues with NAs, let's eliminate these 8 individuals from the model
 
-select(glm_2015_data, tlf, geno_sex, jday, location, density) %>%
+glm_2015_data  %<>%
+  drop_na()
+
+select(glm_2015_data, tlf, geno_sex, jday, location, density, sex_ratio_rg_l) %>%
   pairs(., lower.panel = panel.cor, diag.panel = panel.hist, upper.panel = panel.smooth2)
 
 str(glm_2015_data)
 ```
 
-Once again location and jday are strongly collinear. There is some overlap, but mostly one location is used early and second is used late. Density is also pretty unbalanced with respect to locaiton.
+Finally it looks like we could model location, there is limited collinearity between location and other predictors, but extremely unbalanced releases create a problem. There is a third release location with very few released individuals. 
 
 ```{r}
-M2015_NB <- glm.nb(tlf ~ geno_sex+location  +density  +jday , data = glm_2015_data)
-M2015_NB1 <- glm.nb(tlf ~ geno_sex+location  +density  , data = glm_2015_data)
+M2015_NB <- glm.nb(tlf ~ geno_sex+location  +density  +jday +sex_ratio_rg_l , data = glm_2015_data)
+M2015_NB1 <- glm.nb(tlf ~ geno_sex+location  +density +sex_ratio_rg_l , data = glm_2015_data)
+M2015_NB2 <- glm.nb(tlf ~ geno_sex+jday  +density +sex_ratio_rg_l , data = glm_2015_data)
 
 #summary(M2015_NB)  
 vif(M2015_NB)
 vif(M2015_NB1)
+vif(M2015_NB2)
 ```
 
-```{r}
-M2015_NB2 <- glm.nb(tlf ~ geno_sex  +density  +jday + geno_sex*density + geno_sex*jday, data = glm_2015_data)
-M2015_NB3 <- glm.nb(tlf ~ geno_sex+location  +density + geno_sex*density   , data = glm_2015_data)
+Reoving either jday or location fixes the multicollinearity. The extremely unbalanced nature of location suggests we should use jday, but recall that these variables will always be confounded.
 
-AIC(M2015_NB2, M2015_NB3)
-
-BIC(M2015_NB2, M2015_NB3)
-anova(M2015_NB2, M2015_NB3)
-```
-
-The model that uses location instead of jday is a little more informative. Will move forward with this one for model selection. 
 
 Let's look for non-linear density effects.
 ```{r}
-M2015_NB4 <- glm.nb(tlf ~ geno_sex+location  +poly(density,2) + geno_sex*poly(density,2)   , data = glm_2015_data)
+M2015_NB <- glm.nb(tlf ~ geno_sex+ jday + density + sex_ratio_rg_l +geno_sex*density + geno_sex*sex_ratio_rg_l + geno_sex*jday, data = glm_2015_data)
 
-AIC(M2015_NB3, M2015_NB4)
-BIC(M2015_NB3, M2015_NB4)
-anova(M2015_NB3, M2015_NB4)
+M2015_NB_nl_j <- glm.nb(tlf ~ geno_sex+ poly(jday,2) + density + sex_ratio_rg_l +geno_sex*density + geno_sex*sex_ratio_rg_l + geno_sex*poly(jday,2), data = glm_2015_data)
+
+M2015_NB_nl_d <- glm.nb(tlf ~ geno_sex+ jday + poly(density,2) + sex_ratio_rg_l +geno_sex*poly(density,2) + geno_sex*sex_ratio_rg_l + geno_sex*jday, data = glm_2015_data)
+
+M2015_NB_nl_s <- glm.nb(tlf ~ geno_sex+ jday + density + poly(sex_ratio_rg_l,2) +geno_sex*density + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*jday, data = glm_2015_data)
+
+M2015_NB_nl_dj <- glm.nb(tlf ~ geno_sex+ poly(jday,2) + poly(density,2) + sex_ratio_rg_l +geno_sex*poly(density,2) + geno_sex*sex_ratio_rg_l + geno_sex*poly(jday,2), data = glm_2015_data)
+
+M2015_NB_nl_sj <- glm.nb(tlf ~ geno_sex+ poly(jday,2) + density + poly(sex_ratio_rg_l,2) +geno_sex*density + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*poly(jday,2), data = glm_2015_data)
+
+M2015_NB_nl_sd <- glm.nb(tlf ~ geno_sex+ jday + poly(density,2) + poly(sex_ratio_rg_l,2) +geno_sex*poly(density,2) + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*jday, data = glm_2015_data)
+
+M2015_NB_nl_sdj <- glm.nb(tlf ~ geno_sex+poly(jday,2)  +poly(density,2) + poly(sex_ratio_rg_l,2) +geno_sex*poly(density,2)   + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*poly(jday,2), data = glm_2015_data)
+
+AIC(M2015_NB,M2015_NB_nl_j, M2015_NB_nl_d, M2015_NB_nl_s, M2015_NB_nl_dj, M2015_NB_nl_sj, M2015_NB_nl_sd, M2015_NB_nl_sdj )
+BIC(M2015_NB,M2015_NB_nl_j, M2015_NB_nl_d, M2015_NB_nl_s, M2015_NB_nl_dj, M2015_NB_nl_sj, M2015_NB_nl_sd, M2015_NB_nl_sdj )
+anova(M2015_NB, M2015_NB_nl_s)
 
 ```
 
-Non-linear is slightly better by AIC, worse by BIC, and the LRT suggests the improvement is not significant. Let's use the simpler model (linear)
+Non-linear for sex ratio is better than all other models by AIC but not BIC and signifcantly better than a purely linear effects model according to LRT (p = 0.009) Let's use it. 
 
 ```{r}
-drop1(M2015_NB3, test ="Chisq")
+drop1(M2015_NB_nl_s, test ="Chisq")
 ```
 
 Interaction not significant, so let's fit again with main effects
 
 ```{r}
-M2015_NB5 <- glm.nb(tlf ~ geno_sex+location  +density   , data = glm_2015_data)
-drop1(M2015_NB5, test = "Chisq")
+M2015_NB8 <- glm.nb(tlf ~ geno_sex+ jday + density + poly(sex_ratio_rg_l,2) +geno_sex*density + geno_sex*poly(sex_ratio_rg_l,2) , data = glm_2015_data)
+drop1(M2015_NB8, test = "Chisq")
+
 ```
 
-LRT suggests a final model with sex and location. Now let's do backward stepwise with Wald. 
+LRT suggests a final model with day, sex, density  sex ratio and two interactions, sex ratio * sex and density * sex
+
+Let's do model selection with Wald
 
 ```{r}
-summary(M2015_NB3)
-summary(M2015_NB5)
-summary(update(M2015_NB5, .~. - density))
+summary(M2015_NB_nl_s)
+summary(M2015_NB8)
+
 ```
 
-Stepwise and single term deletions model selections agree: fit a final model with just location and sex.
+Stepwise and single term deletions model selections agree
 
 ```{r}
-M2015_NB6 <- update(M2015_NB5, .~. - density)
-plot(M2015_NB6)
-qqrplot(M2015_NB6)
-rootogram(M2015_NB6)
-simulateResiduals(M2015_NB6, plot = TRUE)
+plot(M2015_NB8)
+qqrplot(M2015_NB8)
+rootogram(M2015_NB8)
+simulateResiduals(M2015_NB8, plot = TRUE)
 ```
 
 __Summary__
 
-Final model included a significant effect of only sex and location. Males had lower fitness than females and Dry Creek had higher fitness than Breitenbush. However, recall that location and release date were strongly collinear. This means the location effect we describe here could also be a release date effect. 
+This one has a lot of significant effects. Two interaction terms: sex and density, as well as sex and sex ratio, jday is also in there. 
+
+```{r}
+pe_j_2015 <- as.data.frame(predictorEffect("jday", M2015_NB8))
+
+actual_means <- glm_2015_data %>%
+  group_by(jday) %>%
+  summarise(mean_tlf = mean(tlf))
+
+ggplot(data = pe_j_2015, aes(x = (jday), y = fit))+ 
+  geom_line() +
+  xlab("Julian Day of Release") +
+  geom_smooth( aes(ymin = lower, ymax = upper), stat = "identity") +
+  theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 3)) +
+  geom_rug(data = glm_2015_data, aes(x = jday, y = NULL)) + 
+  geom_point(data = actual_means, aes(x = jday, y = mean_tlf), alpha = 0.8, shape = 24, size = 2)+ggtitle("2015 Predictors of Fitness - Release Day")
+  
+
+eff1 <- predictorEffect("density", M2015_NB8)
+effdf <- as.data.frame(eff1)
+
+
+actual_means <- glm_2015_data %>%
+  group_by(density, geno_sex) %>%
+  summarise(mean_tlf = mean(tlf))
+
+ggplot(data = effdf, aes(x = (density), y = fit, color = geno_sex))+ 
+  geom_line() +
+  xlab("Density") +
+  geom_smooth( aes(ymin = lower, ymax = upper, fill = geno_sex, colour = geno_sex), stat = "identity") +
+  theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 2)) + scale_color_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) + scale_fill_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) +
+  geom_rug(data = glm_2015_data, aes(x = density, y = NULL, color = NULL))+ggtitle("2015 Predictors of Fitness - Sex * Density Interaction")
+
+# sex ratio
+eff1 <- predictorEffect("sex_ratio_rg_l", M2015_NB8)
+effdf <- as.data.frame(eff1)
+
+effdf %<>%
+  mutate(sex_ratio = exp(sex_ratio_rg_l))
+
+actual_means <- mm_data %>%
+  group_by( geno_sex, sex_ratio_rg) %>%
+  summarise(mean_tlf = mean(tlf))
+
+ggplot(data = effdf, aes(x = (sex_ratio), y = fit, color = geno_sex))+ 
+  geom_line()+scale_x_continuous(trans = "log", breaks = c(1/10, 1/5, 1/2, 1, 2, 4, 6)) +
+  xlab( bquote(atop("Release Group Sex Ratio",(N[male]/N[female])))) +
+  geom_smooth( aes(ymin = lower, ymax = upper, fill = geno_sex, colour = geno_sex), stat = "identity") +
+  theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 3)) +  scale_color_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) + scale_fill_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) +
+  geom_rug(data = glm_2015_data, aes(x = sex_ratio_rg, y = NULL, color = NULL)) + ggtitle("2015 Predictors of Fitness\nSex * Sex Ratio Interaction")
+  #geom_point(data = actual_means, aes(x = sex_ratio_rg, y = mean_tlf, color = geno_sex), alpha = 0.8, shape = 24, size = 2)
+  
+  
+```
+
+
+
 
 ### glm stray thoughts
 
@@ -1927,7 +2204,7 @@ We primarily follow the approach described in Zuur et al 2009. Mixed Effects Mod
 
 ### Data and EDA
 
-Let's prepare the data. We need several additional variables (release group, julian day, density for each release group, total number of fish released in a year).
+Let's prepare the data. We need several additional variables (release group, julian day, density for each release group, total number of fish released in a year, annual sex ratios).
 
 ```{r}
 mm_data <-  parents %>%
@@ -1935,11 +2212,15 @@ mm_data <-  parents %>%
   select(date, geno_sex, location, tlf, year) %>%
   drop_na() %>%
   mutate(jday = as.numeric(format(date, "%j"))) %>% #julian day in this case: days since the first day of the year
+  mutate(location = case_when(location == "dry cr" ~ "dry creek",
+                              TRUE ~ as.character(location))) %>%
+  mutate(location = as.factor(location)) %>%
   mutate(jday_c = scale(jday, scale = F),#center the julian day to help with convergence
          geno_sex = as.factor(geno_sex),
          location = as.factor(location),
          year = as.factor(year),
          group = as.factor(paste(date, location)))
+
 
 # lets add density
 dens <- mm_data %>%
@@ -2023,46 +2304,24 @@ beyond_opt_main <- glm.nb(tlf ~ jday_c + geno_sex + density+sex_ratio_y_l + sex_
 vif(beyond_opt_main)
 ```
 
-Now annual sex ratio seems to present the biggest problem, probably due to it's relationship with the other annual level variable: annual_n.
 
-Let's choose which to keep by AIC. We'll fit each model with all other possible fixed and random effects and compare.
-
-```{r}
-no_loc_1 <- glmmTMB(tlf ~ jday_c + geno_sex + density+sex_ratio_y_l + sex_ratio_rg_l + annual_n +geno_sex*jday_c + geno_sex*density + geno_sex*sex_ratio_y_l + geno_sex*sex_ratio_rg_l + (1|group) + (1|year) , data = mm_data, family = nbinom2) #both
-
-no_loc_2 <- glmmTMB(tlf ~ jday_c + geno_sex + density + sex_ratio_rg_l  +geno_sex*jday_c + geno_sex*density  + geno_sex*sex_ratio_rg_l  + (1|group) + (1|year) , data = mm_data, family = nbinom2) #no annual sex ratio 
-
-no_loc_3 <- glmmTMB(tlf ~ jday_c + geno_sex + density+sex_ratio_y_l + sex_ratio_rg_l  +geno_sex*jday_c + geno_sex*density + geno_sex*sex_ratio_y_l + geno_sex*sex_ratio_rg_l  + (1|group) + (1|year) , data = mm_data, family = nbinom2) #no annual n
-
-
-AIC(no_loc_1, no_loc_2, no_loc_3)
-lrtest(no_loc_1, no_loc_3)
-lrtest(no_loc_1, no_loc_2)
-lrtest(no_loc_2, no_loc_3)
-
-```
-
-Including annual sex ratios is a much better fit to the data than annual outplanting program size. The best fit includes only annual sex ratio, but it's not a very big jump in AIC. Let's keep both.
-
-```{r}
-beyond_opt_main_x <- glm.nb(tlf ~ jday_c + geno_sex + density+sex_ratio_y_l + sex_ratio_rg_l + annual_n, data = mm_data)
-vif(beyond_opt_main_x)
-```
 
 As a summary so far: location demonstrated collinearity with release date in some years. Any significant effect of release date needs to be considered in light of this confounding. We also considered two year-level fixed effects, total number of outplants in a year and the overall sex ratio among outplants in a year. These were only slightly collinear, but we should remember that any year level effects are confounded by all the other variables, considered here or otherwise, that vary between years and could be driving signifcant effects.
 
 ### Model Selection
 
-Now lets fit the beyond optimal model. This has more fixed effects than we could possibly want in our final model, but that is desirable for finding the optimum random effect structure.
+Now lets fit the beyond optimal model. This has more fixed effects than we could possibly want in our final model, but that is desirable for finding the optimum random effect structure. We should also fit all fixed effects that could reasonably be non-linear using polynomials, as the linear model is nested within the polynomial and therefore the polynomial is better as the satured/beyond optimal. 
+
+In the annual GLMs, we saw that extreme values of sex ratio or density produced lower fitness. So we should definitely try to fit at least these two variables as non-linear. Day never had anything resembling a non-linear effect. For annual sex ratio's we only have observations across 5 years and no extreme values, so we should probably fit as linear, but it is worth exploring.  We'll include these three as non-linear effects to start.
 
 ```{r, cache = TRUE, eval = FALSE}
-mm_beyond_opt <- glmmTMB(tlf ~ jday_c + geno_sex  +  density+ annual_n + geno_sex*density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2, REML = TRUE)
+mm_beyond_opt <- glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2)+ annual_n + geno_sex*poly(density,2)+poly(sex_ratio_y_l,2)+ poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_y_l,2) + (1|group) + (1|year), data = mm_data, family = nbinom2, REML = TRUE)
 
-mm_beyond_opt2 <- glmmTMB(tlf ~ jday_c + geno_sex +  density+ annual_n+ geno_sex*density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l  +(1|year), data = mm_data, family = nbinom2,  REML = TRUE)
+mm_beyond_opt2 <- glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2)+ annual_n + geno_sex*poly(density,2)+poly(sex_ratio_y_l,2)+ poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_y_l,2)  +(1|year), data = mm_data, family = nbinom2,  REML = TRUE)
 
-mm_beyond_opt3 <- glmmTMB(tlf ~ jday_c + geno_sex +  density + annual_n+ geno_sex*density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l +   (1|group), data = mm_data, family = nbinom2,  REML = TRUE)
+mm_beyond_opt3 <- glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2)+ annual_n + geno_sex*poly(density,2)+poly(sex_ratio_y_l,2)+ poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_y_l,2) + (1|group), data = mm_data, family = nbinom2,  REML = TRUE)
 
-mm_beyond_opt4 <- glmmTMB(tlf ~ jday_c + geno_sex +  geno_sex* density + annual_n+ geno_sex*density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l , data = mm_data, family = nbinom2,  REML = TRUE)
+mm_beyond_opt4 <- glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2)+ annual_n + geno_sex*poly(density,2)+poly(sex_ratio_y_l,2)+ poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_y_l,2) , data = mm_data, family = nbinom2,  REML = TRUE)
 
 
 
@@ -2072,16 +2331,26 @@ BIC(mm_beyond_opt, mm_beyond_opt2, mm_beyond_opt3, mm_beyond_opt4)
 lrtest(mm_beyond_opt4, mm_beyond_opt)
 lrtest(mm_beyond_opt4, mm_beyond_opt2)
 lrtest(mm_beyond_opt4, mm_beyond_opt3)
-
 summary(mm_beyond_opt)
 ```
 
 AIC and BIC agree the best fit to the data is the full random effects model including both release group and year. 
 
+Ultimately the correct random effects structure is a question about the inferences we'd like to make and AIC is only one piece of information to help us understand the releaitonship between parsimony and model fit. 
+
+For example, so many of our variables are calculated at the level of release group, and including release group as a random effect means these variables will be competing with random intercepts for release group. Same goes for year. 
+
+In the case of year we also have a problem that we are trying to estimate a variance form only 5 levels of the variable of interest. The generally held threshold for the levels required is _at least_ five, so we're marginally okay here. However, the generally accepted cutoff for estimating the standard error of these variance estimates is 8, so we should restrict ourselves from discussing this result if we choose to use year as a random effect.
+
+Since we are interested in evaluating the significance of predictors primarily, I'd prefer to be conservative and include them as random effectes. Failing to include year and release group as random effects implies that we are uninterested in the correlation within groups. Inferentially, this implies that the fixed effects at the level of release group or year (release group: sex ratio, density and year: n and sex ratio) are the only effects that might lead to correlation within the levels, and we freely pool across all levels of release group or year and attribute all variance to fixed effects.
+
+We will include random effects for year and release group.
+
+
 Let's refit the model using ML.
 
 ```{r}
-mm_beyond_opt <- glmmTMB(tlf ~ jday_c + geno_sex  +  density+ annual_n + +sex_ratio_y_l + sex_ratio_rg_l + geno_sex*density + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+mm_beyond_opt <- glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2)+ annual_n + geno_sex*poly(density,2)+poly(sex_ratio_y_l,2)+ poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_y_l,2) + (1|group) + (1|year), data = mm_data, family = nbinom2)
 
 summary(mm_beyond_opt)
 ```
@@ -2094,294 +2363,190 @@ Now that we have the random structure figured out, let's do model selection on t
 First should we fit density and/or jday as non-linear
 
 ```{r}
-beyond_opt_nl2 <- glmmTMB(tlf ~ poly(jday_c,2) + geno_sex  +  poly(density,2) + annual_n + sex_ratio_y_l + sex_ratio_rg_l + geno_sex*poly(density,2) + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+beyond_opt_lin <- glmmTMB(tlf ~ jday_c + geno_sex  +  density + annual_n + sex_ratio_y_l + sex_ratio_rg_l + geno_sex*density + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
 
-beyond_opt_nld <-glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2) + annual_n + sex_ratio_y_l + sex_ratio_rg_l + geno_sex*poly(density,2) + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+beyond_opt_nl_s <- glmmTMB(tlf ~ jday_c + geno_sex  +  density + annual_n + sex_ratio_y_l + poly(sex_ratio_rg_l,2) + geno_sex*density + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
 
-beyond_opt_nlj <- glmmTMB(tlf ~ poly(jday_c,2) + geno_sex  +  density + annual_n + sex_ratio_y_l + sex_ratio_rg_l + geno_sex*density + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+beyond_opt_nl_d <-glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2) + annual_n + sex_ratio_y_l + sex_ratio_rg_l + geno_sex*poly(density,2) + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+beyond_opt_nl_y <- glmmTMB(tlf ~ jday_c + geno_sex  +  density + annual_n + poly(sex_ratio_y_l,2) + sex_ratio_rg_l + geno_sex*density + geno_sex*sex_ratio_rg_l + geno_sex*poly(sex_ratio_y_l,2) + (1|group) + (1|year), data = mm_data, family = nbinom2)
   
+beyond_opt_nl_yd <- glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2) + annual_n + poly(sex_ratio_y_l,2) + sex_ratio_rg_l + geno_sex*poly(density,2) + geno_sex*sex_ratio_rg_l + geno_sex*poly(sex_ratio_y_l,2) + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+beyond_opt_nl_sy <- glmmTMB(tlf ~ jday_c + geno_sex  +  density + annual_n + poly(sex_ratio_y_l,2) + poly(sex_ratio_rg_l,2) + geno_sex*density + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_y_l,2) + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+beyond_opt_nl_ds <-glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2) + annual_n + sex_ratio_y_l + poly(sex_ratio_rg_l,2) + geno_sex*poly(density,2) + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+beyond_opt_nl_dys <-glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2) + annual_n + poly(sex_ratio_y_l,2) + poly(sex_ratio_rg_l,2) + geno_sex*poly(density,2) + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_y_l,2) + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+
   
-AIC(beyond_opt_nlj, beyond_opt_nl2, beyond_opt_nld, mm_beyond_opt3)
-BIC(beyond_opt_nlj, beyond_opt_nl2, beyond_opt_nld, mm_beyond_opt3)
+AIC(beyond_opt_nl_s, beyond_opt_nl_d, beyond_opt_nl_y,beyond_opt_nl_yd ,beyond_opt_nl_sy , beyond_opt_nl_ds, beyond_opt_nl_dys, beyond_opt_lin)
+BIC(beyond_opt_nl_s, beyond_opt_nl_d, beyond_opt_nl_y,beyond_opt_nl_yd ,beyond_opt_nl_sy , beyond_opt_nl_ds, beyond_opt_nl_dys, beyond_opt_lin)
+
+anova(beyond_opt_nl_d, beyond_opt_lin)
+anova(beyond_opt_nl_ds, beyond_opt_lin)
 ```
 
-Linear effects are a much worse fit to the data than quadratics for density, release date or both. According to AIC a model with both fit as quadratic is optimal. According to BIC a model with only day is optimal. There's good a priori biological reason to assume both should be non-linear, so my decision making framework here is that we should only keep the sparse model (linear) if there is strong evidence in its favor. Let's fit both as non-linear.
+Fitting release group density as a polynomial appears best by AIC, but improvement is small. LRT suggests not significant.
+Fitting both release group density and sex ratio is a VERY slight improvement to the data over a purely linear model.
+Annual non-linear sex ratio effects are not worht the cost in df.
+
+This fits wiht our a priori expectations from EDA. Both release group varaibles should be non-linear relationship over the range of densities and sex ratios used at the release group level. Whereas with annual sex ratio, only extreme male-biased sex ratios are used, so we can get a more parsimonius model with a linear rather than quadratic effect. Although the delta AIC is not big, let's fit the more complex model. We can always work towards more parsimony with further model selection. We'll keep non-linear effect of release group density and sex ratio.
+
 
 
 ```{r}
-drop1(beyond_opt_nl2, test = "Chisq")
+drop1(beyond_opt_nl_ds, test = "Chisq")
 ```
 
 Let's get rid of the worst interaction term and fit again
 
 
 ```{r}
-drop1(update(beyond_opt_nl2, . ~ . - geno_sex*sex_ratio_rg_l + sex_ratio_rg_l), test = "Chisq")
+drop1(glmmTMB(tlf ~ jday_c + geno_sex  + density + annual_n + sex_ratio_y_l + poly(sex_ratio_rg_l,2) + geno_sex*density  + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2), test = "Chisq")
 ```
 
 Still some non-significant interactions.
 
+```{r}
+drop1(glmmTMB(tlf ~ jday_c + geno_sex  +  density + annual_n + sex_ratio_y_l + sex_ratio_rg_l + geno_sex*density  + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2), test = "Chisq")
+```
+
+
 
 ```{r}
-drop1(glmmTMB(tlf ~ poly(jday_c,2) + geno_sex  +  poly(density,2) + annual_n + sex_ratio_y_l + sex_ratio_rg_l  + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2), test = "Chisq")
+drop1(glmmTMB(tlf ~ jday_c + geno_sex  + density + annual_n + sex_ratio_y_l + sex_ratio_rg_l + geno_sex*density   + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2), test = "Chisq")
+```
+
+```{r}
+drop1(glmmTMB(tlf ~ jday_c + geno_sex  + density + annual_n + sex_ratio_y_l + sex_ratio_rg_l    + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2), test = "Chisq")
 ```
 
 LRT suggests only sex, annual sex ratio and their interaction are signficant. Now Let's do backward stepwise using Wald Tests.
 
-
-
-__old code__
-```{r, eval = FALSE}
-drop1(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+ geno_sex*density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l, data = mm_data), test = "Chisq")
-```
-
-Still more
-
 ```{r}
-drop1(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+ geno_sex*density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_y_l, data = mm_data), test = "Chisq")
-```
-
-
-Still more
-
-```{r}
-drop1(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_y_l, data = mm_data), test = "Chisq")
+summary(beyond_opt_nl_ds)
 ```
 
 ```{r}
-drop1(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+sex_ratio_y_l + sex_ratio_rg_l, data = mm_data), test = "Chisq")
-```
+beyond_opt_nl_d_1 <- glmmTMB(tlf ~ jday_c + geno_sex  +  poly(density,2) + annual_n + sex_ratio_y_l + sex_ratio_rg_l + geno_sex*poly(density,2)  + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
 
-__wald__
-
-Final model by LRT (including backward stepwise elimination of non-significant interaction effects) includes on main effects of day, sex, and annual sex ratio.
-
-Now let's do backward stepwise selection by wald tests. 
-
-```{r}
-summary(glmmTMB(tlf ~ jday_c + geno_sex  + geno_sex + density+ sex_ratio_y_l + sex_ratio_rg_l + geno_sex*density +  geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + density*sex_ratio_y_l + density*sex_ratio_rg_l + (1|group), family = nbinom2, data =mm_data))
-```
-
-
-
-```{r}
-summary(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+ geno_sex*density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + density*sex_ratio_y_l + density*sex_ratio_rg_l, data = mm_data))
-```
-```{r}
-summary(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+ geno_sex*density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l + density*sex_ratio_rg_l, data = mm_data))
+summary(beyond_opt_nl_d_1)
 ```
 
 ```{r}
-summary(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+ geno_sex*density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l, data = mm_data))
+beyond_opt_nl_d_2 <- glmmTMB(tlf ~ jday_c + geno_sex  +  annual_n+ poly(density,2) + sex_ratio_y_l + sex_ratio_rg_l + geno_sex*poly(density,2)  + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+summary(beyond_opt_nl_d_2)
+```
+
+```{r}
+beyond_opt_nl_d_3 <- glmmTMB(tlf ~  geno_sex  +  density +annual_n+ sex_ratio_y_l + sex_ratio_rg_l + geno_sex*density  + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+summary(beyond_opt_nl_d_3)
+```
+
+```{r}
+beyond_opt_nl_d_4 <- glmmTMB(tlf ~  geno_sex  +  density + annual_n+ sex_ratio_y_l + sex_ratio_rg_l   + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+summary(beyond_opt_nl_d_4)
+```
+
+```{r}
+beyond_opt_nl_d_5 <- glmmTMB(tlf ~  geno_sex  +  density +  sex_ratio_y_l  + annual_n   + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+summary(beyond_opt_nl_d_5)
 ```
 
 
 ```{r}
-summary(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_rg_l + geno_sex*sex_ratio_y_l, data = mm_data))
+beyond_opt_nl_d_6<- glmmTMB(tlf ~  geno_sex  + sex_ratio_y_l +annual_n  + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+summary(beyond_opt_nl_d_6)
 ```
 
 
 ```{r}
-summary(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+sex_ratio_y_l + sex_ratio_rg_l + geno_sex*sex_ratio_y_l, data = mm_data))
-```
+beyond_opt_nl_d_7<- glmmTMB(tlf ~  geno_sex  +  sex_ratio_y_l +  geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
 
-
-
-```{r}
-summary(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+sex_ratio_y_l + sex_ratio_rg_l,  data = mm_data))
+summary(beyond_opt_nl_d_7)
 ```
 
 
 ```{r}
-summary(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex + density+sex_ratio_y_l ,  data = mm_data))
+final_model<- glmmTMB(tlf ~  geno_sex  +  sex_ratio_y_l  + geno_sex*sex_ratio_y_l + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+summary(final_model)
 ```
 
+Variable selection procedures agree. sex, sex ratio (annual) and their interaction is significant. 
 
-```{r}
-summary(glm.nb(tlf ~ jday_c + geno_sex  + geno_sex +sex_ratio_y_l ,  data = mm_data))
-```
-
-Final model by backward stepwsie selection on the Wald test finds the same model.
 
 ### Model validation
 
 
 ```{r}
-final_model <- glmmTMB(tlf ~  geno_sex  +sex_ratio_y_l + geno_sex*sex_ratio_y_l + (1|group) +  (1|year),  data = mm_data, family = nbinom2)
+#final_model <- glmmTMB(tlf ~  geno_sex  +sex_ratio_y_l + geno_sex*sex_ratio_y_l + (1|group) +  (1|year),  data = mm_data, family = nbinom2)
 #plot(final_model)
 #qqrplot(final_model)
 #rootogram(final_model)
 simulateResiduals(final_model, plot = TRUE)
-```
-
-
-
-Model fits excellently!
-
-
-### Effects
-
-```{r}
 summary(final_model)
 ```
 
 
-__Sex__
 
-Males have lower fitness than females, but the main effect is not significant, instead it is the interaction with sex ratio that seems to drive the difference
+Model fits excellently! The qq plot of simulated residuals shows a good fit, there is no evidence of overdispersion, and outliers don't seem to drive the fit. We also don't see any pattern to the residuals. 
 
-Below we plot estimated marginal means. 
+Since we have so few levels of year, it is also useful to make sure we didn't get a "singular" fit, but the random effect estimates are reasonable (if not a little large)
+
+
+### Effects
 ```{r}
-require(emmeans)
-sex_effect <- emmeans(final_model, specs = pairwise ~ geno_sex, type = "response" )
-sex_effect
-plot(sex_effect)+theme_classic()+xlab("Estimated Marginal Mean TLF\nwith 95% CIs")+ylab("sex")
-```
-
-```{r}
-ggplot(data = mm_data)+geom_boxplot(aes(x = geno_sex, y = log(tlf)))
+final_sum <- summary(final_model)
 ```
 
 
-__Sex Ratio__
+__Random Effects__
 
-As the sex ratio is biased towards more males, overall fitness is decreased. Still working on estimated marginal means, instead I plot the predictions from the model and the actual data. 
-
-```{r}
-ggplot(data = mm_data, aes(y = log(tlf), x =exp(sex_ratio_y_l)))+geom_jitter( alpha = 0.5)+stat_summary(
-    geom = "point",
-    fun.y = "mean",
-    col = "black",
-    size = 3,
-    shape = 24,
-    fill = "red"
-  )+theme_classic()+xlab("Annual Sex Ratio\n(male/female)")+ylab("Log(TLF)")+ggtitle("Log Total Lifetime Fitness vs Annual Sex Ratios\nActual Data")
-
-ggplot(data = mm_data, aes(y = (tlf), x =exp(sex_ratio_y_l)))+geom_jitter( alpha = 0.5)+stat_summary(
-    geom = "point",
-    fun.y = "mean",
-    col = "black",
-    size = 3,
-    shape = 24,
-    fill = "red"
-  )+theme_classic()+xlab("Annual Sex Ratio\n(male/female)")+ylab("(TLF)")+ggtitle("Total Lifetime Fitness vs Annual Sex Ratios\nActual Data")
-```
-
-```{r}
-pred1 <- as.data.frame( cbind(exp(mm_data$sex_ratio_y_l),predict(final_model, type = "response", terms = "sex_ratio_y_l")))
-colnames(pred1) <- c("sex_ratio_y_l", "predicted_tlf")
-
-
-ggplot(data = pred1)+geom_point(aes(sex_ratio_y_l,predicted_tlf))+ theme_classic()+xlab("Annual Sex Ratio\n(male/female)")+ylab("Predicted  TLF)")+ggtitle("Total Lifetime Fitness vs Annual Sex Ratios\nModel Predictions")
-```
-
-Fairly large effect of sex ratio. 
+The among year standard deviation in TLF was 0.324 (log scale), and the among release group standard deviation was 0.283 (log scale)
 
 __Interaction__
 
-The effect of sex overall is not significant, it is only it's interaction with sex ratio that drives differences between fitness. Below we plot some interaction plots. 
+Since the interaction is significant, let's plot and examine the effects of sex and sex ratio together.
+
 
 ```{r}
-emmip(final_model, geno_sex ~ sex_ratio_y_l, cov.reduce = range, type = "response")+theme_classic()+scale_color_viridis_d(end = 0.8)+xlab("Sex Ratio\n Log(N Males / NFemales)")+ylab("Predicted Fitness")
+require(effects)
 
-emmip(final_model, geno_sex ~ sex_ratio_y_l, cov.keep = "percent", type = "response", at = list(sex_ratio_y_l = c(-0.3, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7)))+theme_classic()+scale_color_viridis_d(end = 0.8)+xlab("Sex Ratio\n Log(N Males / NFemales)")+ylab("Predicted Fitness")
+#let's not use the effect package plotting tools and just get the effects
 
-emmip(final_model, geno_sex ~ sex_ratio_y_l, cov.keep = "percent", type = "response", at = list(sex_ratio_y_l = c(-0.3, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7)), CIs = TRUE)+theme_classic()+scale_color_viridis_d(end = 0.8)+xlab("Sex Ratio\n Log(N Males / NFemales)")+ylab("Predicted Fitness")
-```
+#eff1 <- predictorEffect("sex_ratio_y_l", final_model, focal.levels = seq(-0.4,0.7,by = 0.1))
+eff1 <- predictorEffect("sex_ratio_y_l", final_model)
+effdf <- as.data.frame(eff1)
 
+effdf %<>%
+  mutate(sex_ratio = exp(sex_ratio_y_l))
 
+actual_means <- mm_data %>%
+  group_by(year, geno_sex, sex_ratio_y) %>%
+  summarise(mean_tlf = mean(tlf))
 
-
-
-
-
-
-
-
-
-### other
-
-
-
-Global model is significant. Let's look at the quality of the fit.
-
-```{r, eval = FALSE}
-simulateResiduals(mm_full, plot = TRUE)
-```
-
-There's some issues with the full model:  
-
-Group random effect doesn't seem to be doing much. The variance driven by group is only about 1/70th of the variance driven by year. We will probably benefit from removing this variance term from the final model.  
-The magnitude of the standardized residuals doesn't depend on the fitted values, which is good, but we see that the residuals themselves are quite large, indicating that it is not a very powerful model. 
-
-Let's see if we can specify a better model.  
-
-### Model Selection
-
-We will follow the approach from Zuur et al 2009: First find the optimum random structure by including the fully saturated fixed model, but varying the random effects. Choose by AIC. Then fit all possible fixed effect structures with this "best" random effect structure. Choose best here by AIC as well. 
-
-First the random effects:
-```{r, cache = TRUE, eval = FALSE}
-mm_linear <- glm.nb(tlf ~ jday_c + geno_sex + location + geno_sex*location, data = mm_data) 
-mm_ran_1 <- glmer.nb(tlf ~ jday_c + geno_sex + location + geno_sex*location+ (1|group), data = mm_data) 
-mm_ran_2 <- glmer.nb(tlf ~ jday_c + geno_sex + location + geno_sex*location+ (1|year), data = mm_data) 
-#mm_full <- glmer.nb(tlf ~ jday_c + geno_sex + location + geno_sex*location+ (1|group) + (1|year), data = mm_data) 
-
-```
-
-```{r, eval = FALSE}
-AIC(mm_linear, mm_ran_1, mm_ran_2, mm_full)
-```
-
-The full random model and the random model with only year as random effect were within 2 AIC. This suggests they are equivalent and we should choose the one with the fewest parameters. So our final random effect structure is just year.
-
-Now that we the optimum random effect structure, let's find the fixed effect structure:
-
-```{r, eval = FALSE}
-# 3 effects
-mm_f1 <- glmer.nb(tlf ~ jday_c + geno_sex + location + (1|year), data = mm_data) 
-mm_f2 <- glmer.nb(tlf ~ jday_c + geno_sex +  geno_sex*location+ (1|year), data = mm_data) 
-mm_f3 <- glmer.nb(tlf ~ jday_c  + location + geno_sex*location+ (1|year), data = mm_data) 
-mm_f4 <- glmer.nb(tlf ~ geno_sex + location + geno_sex*location+ (1|year), data = mm_data) 
-
-# 2 effects
-mm_f5 <- glmer.nb(tlf ~ jday_c + geno_sex + (1|year), data = mm_data) 
-mm_f6 <- glmer.nb(tlf ~ jday_c + location + (1|year), data = mm_data) 
-mm_f7 <- glmer.nb(tlf ~ jday_c + geno_sex*location + (1|year), data = mm_data) 
-mm_f8 <- glmer.nb(tlf ~ geno_sex + location + (1|year), data = mm_data) 
-mm_f9 <- glmer.nb(tlf ~ geno_sex + geno_sex*location + (1|year), data = mm_data) 
-mm_f10 <- glmer.nb(tlf ~ location + geno_sex*location + (1|year), data = mm_data) 
-
-# 1 effects
-mm_f11 <- glmer.nb(tlf ~ jday_c + (1|year), data = mm_data) 
-mm_f12 <- glmer.nb(tlf ~ geno_sex + (1|year), data = mm_data) 
-mm_f13 <- glmer.nb(tlf ~ location + (1|year), data = mm_data) 
-mm_f14 <- glmer.nb(tlf ~ geno_sex*location + (1|year), data = mm_data) 
-
-AIC(mm_f1, mm_f2, mm_f3, mm_f4, mm_f5, mm_f6, mm_f7, mm_f8, mm_f9, mm_f10, mm_f11, mm_f12, mm_f13, mm_f14)
-```
-
-
-### Final Model
-
-The final model includes 2 fixed (sex and julian day) and one random effect (year). Results from thsi model are below.
-
-First let's get the likelihood ratios, df, and p-values (from chi-square test) for each effect 
-```{r, eval = FALSE}
-kable(anova(mm_f12, mm_f5), caption = "LRT for Julian Day", align = "c") %>% # jday
-  kable_classic(full_width = F, html_font = "Cambria")
+ggplot(data = effdf, aes(x = (sex_ratio), y = fit, color = geno_sex))+ 
+  geom_line()+scale_x_continuous(trans = "log", n.breaks = 10) +
+  xlab( bquote(atop("Sex Ratio",(N[male]/N[female])))) +
+  geom_smooth( aes(ymin = lower, ymax = upper, fill = geno_sex, colour = geno_sex), stat = "identity") +
+  theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 3)) + scale_color_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) + scale_fill_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) +
+  geom_rug(data = mm_data, aes(x = sex_ratio_y, y = NULL, color = NULL)) + 
+  geom_point(data = actual_means, aes(x = sex_ratio_y, y = mean_tlf, color = geno_sex), alpha = 0.8, shape = 24, size = 2)
   
-kable(anova(mm_f11, mm_f5), caption = "LRT for Sex", align = "c") %>% # jday
-  kable_classic(full_width = F, html_font = "Cambria")  
-  
+
 ```
 
-let's stop until I can get better at mixed modeling. some resources to read
+The plot above shows the predicted TLF (lines and 95% confidence intervals) from the final mixed model fit, and the mean TLF from the empirical data (triangles) against sex ratio in a given year for both male and female Chinook salmon outplanted or reintroduced above Detroit dam from 2011 to 2015. 
 
-Zuur book 1 
-Zuur book 2 (should we consider zero inflation) Zuur, A. F. S., A. A. Ieno. 2012. Zero inflated models and generalized linear mixed models with R.
-Bolker faq: bbolker.github.io/mixedmodels-misc
-Bolker, B. M., M. E. Brooks, C. J. Clark, S. W. Geange, J. R. Poulsen, M. H. H. Stevens, and J.-S. S. White. 2009. Generalized linear mixed models: a practical guide for ecology and evolution. Trends in Ecology & Evolution 24:127–135.
+
 
 
 # Effective Number of Breeders
