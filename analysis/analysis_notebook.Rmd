@@ -13,7 +13,9 @@ output:
 require(RLDNe)
 require(car)
 require(DHARMa)
+require(emmeans)
 require(MASS)
+require(effects)
 require(glmmTMB)
 require(lme4)
 require(kableExtra)
@@ -357,7 +359,8 @@ Results are prepared for each of the following groups:
 
 * Outplants (Above Detroit)   
 * Reintroductions (Below Big Cliff)  
-* Reintroductions (Above Detroit)  
+* Reintroductions (Above Detroit)    
+* All abobve Detroit
 
 
 Within each of the above, calculate for each parent year and each sex. 
@@ -544,6 +547,39 @@ rm(b)
 
 
 __2015 together__
+
+```{r}
+kable(parents %>%
+        filter(year == 2015, type %in% c("reintro_above", "outplant")) %>%
+  group_by(geno_sex) %>%
+  summarise(crr = sum(same_sex_offspring)/n()), align = "c", digits = 2, caption = "crr by sex for all salmon outplanted OR reintroduced above detroit dam") %>%
+  kable_classic(full_width = F, html_font = "Cambria") %>%
+  kable_styling(fixed_thead = T) %>%
+  scroll_box(height = "400px")
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+a <- pedigree_meta %>%
+  mutate(parent_year = coalesce(mother_year, father_year)) %>%
+  filter(father_type %in% c("reintro_above", "outplant") | mother_type %in% c("reintro_above", "outplant") ) %>% 
+  group_by(parent_year) %>%
+  summarise(offspring_n = n())
+
+b <- full_meta %>%
+  filter(type %in% c("reintro_above", "outplant") ) %>%
+  count(year) %>%
+  rename(parent_year = year, n__above = n)
+
+kable(left_join(a,b), align = "c", caption = "total number of offspring that assign to reintros or outplants above Detroit per parent year") %>% kable_classic(full_width = F, html_font = "Cambria") %>%
+  kable_styling(fixed_thead = T) 
+
+rm(a)
+rm(b)
+
+
+```
+
 
 
 # Predictors of Fitness
@@ -1376,39 +1412,6 @@ __Summary__
 There were no significant effects.
 
 
-```{r}
-require(effects)
-
-#let's not use the effect package plotting tools and just get the effects
-
-#eff1 <- predictorEffect("sex_ratio_y_l", final_model, focal.levels = seq(-0.4,0.7,by = 0.1))e
-eff1 <- predictorEffect("sex_ratio_rg_l", M2011_NB)
-effdf <- as.data.frame(eff1)
-
-effdf %<>%
-  mutate(sex_ratio = exp(sex_ratio_rg_l))
-
-actual_means <- mm_data %>%
-  group_by(year, geno_sex, sex_ratio_rg_l) %>%
-  summarise(mean_tlf = mean(tlf))
-
-ggplot(data = effdf, aes(x = (sex_ratio_rg_l), y = fit, color = geno_sex))+ 
-  geom_line()
-
-
-ggplot(data = effdf, aes(x = (sex_ratio), y = fit, color = geno_sex))+ 
-  geom_line()+scale_x_continuous(trans = "log", n.breaks = 10) +
-  xlab( bquote(atop("Sex Ratio",(N[male]/N[female])))) +
-  geom_smooth( aes(ymin = lower, ymax = upper, fill = geno_sex, colour = geno_sex), stat = "identity") +
-  theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 3)) + scale_color_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) + scale_fill_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) +
-  geom_rug(data = mm_data, aes(x = sex_ratio_rg_l, y = NULL, color = NULL)) + 
-  geom_point(data = actual_means, aes(x = sex_ratio_rg_l, y = mean_tlf, color = geno_sex), alpha = 0.8, shape = 24, size = 2)
-  
-
-```
-
-
-
 ### 2012
 
 
@@ -1730,12 +1733,6 @@ __Summary__
 
 In 2013 there was a significant effect of release day, release group sex ratio and density. Let's plot the effects.
 
-```{r}
-require(emmeans)
-day_effect <- emmeans(glm2013_final, type = "response" )
-day_effect
-plot(day_effect)+theme_classic()+xlab("Estimated Marginal Mean TLF\nwith 95% CIs")+ylab("day")
-```
 
 
 ```{r}
@@ -2148,9 +2145,6 @@ effdf <- as.data.frame(eff1)
 effdf %<>%
   mutate(sex_ratio = exp(sex_ratio_rg_l))
 
-actual_means <- mm_data %>%
-  group_by( geno_sex, sex_ratio_rg) %>%
-  summarise(mean_tlf = mean(tlf))
 
 ggplot(data = effdf, aes(x = (sex_ratio), y = fit, color = geno_sex))+ 
   geom_line()+scale_x_continuous(trans = "log", breaks = c(1/10, 1/5, 1/2, 1, 2, 4, 6)) +
@@ -2547,8 +2541,197 @@ ggplot(data = effdf, aes(x = (sex_ratio), y = fit, color = geno_sex))+
 The plot above shows the predicted TLF (lines and 95% confidence intervals) from the final mixed model fit, and the mean TLF from the empirical data (triangles) against sex ratio in a given year for both male and female Chinook salmon outplanted or reintroduced above Detroit dam from 2011 to 2015. 
 
 
+### Other Types
+
+We benefit form having somewhat indepedent data against which to test our predictions in the form of fish from below Big Cliff. Let's quickly assess if there is a relationship between TLF and annual sex ratios for carcasses and reintros below.
+
+```{r}
+mm_data_below <-  parents %>%
+  filter(type %in% c("reintro"), year < 2017) %>%
+  select(date, geno_sex, location, tlf, year, type) %>%
+  mutate(jday = as.numeric(format(date, "%j"))) %>% #julian day in this case: days since the first day of the year
+  mutate(location = case_when(location == "dry cr" ~ "dry creek",
+                              TRUE ~ as.character(location))) %>%
+  mutate(location = as.factor(location)) %>%
+  mutate(jday_c = scale(jday, scale = F),#center the julian day to help with convergence
+         geno_sex = as.factor(geno_sex),
+         location = as.factor(location),
+         year = as.factor(year),
+         group = as.factor(paste(date, location)))
 
 
+# lets add density
+dens <- mm_data_below %>%
+ group_by(jday, location, year) %>%
+  summarise(density = n())
+
+mm_data_below %<>%
+  left_join(dens)
+
+# lets add overall size of release in a year
+dens <- mm_data_below %>%
+ group_by( year) %>%
+  summarise(annual_n = n())
+
+mm_data_below %<>%
+  left_join(dens)
+
+
+# lets add sex ratio
+#build release group sex ratio variable
+f <- mm_data_below %>% 
+  filter(geno_sex == "F") %>%
+  group_by(location, jday, year) %>% 
+  summarise(n_female_rg = n()) 
+
+mm_data_below %<>%
+  left_join(f)
+
+m <- mm_data_below %>% 
+  filter(geno_sex == "M") %>%
+  group_by(location, jday, year) %>% 
+  summarise(n_male_rg = n()) 
+
+mm_data_below %<>%
+  left_join(m) %>%
+  mutate(sex_ratio_rg = n_male_rg/n_female_rg)
+
+# maybe the release groups all mix thoroughly spawn together and we should fit sex ratio at the level of year
+f <- mm_data_below %>% 
+  filter(geno_sex == "F") %>%
+  group_by( year) %>% 
+  summarise(n_female_y = n()) 
+
+mm_data_below %<>%
+  left_join(f)
+
+m <- mm_data_below %>% 
+  filter(geno_sex == "M") %>%
+  group_by( year) %>% 
+  summarise(n_male_y = n()) 
+
+mm_data_below %<>%
+  left_join(m) %>%
+  mutate(sex_ratio_y = n_male_y/n_female_y)
+
+
+mm_data_below %<>%
+  mutate(sex_ratio_rg_l = log(sex_ratio_rg),
+         sex_ratio_y_l = log(sex_ratio_y))
+
+
+
+```
+
+```{r}
+below_tlf_means <- mm_data_below %>%
+  group_by(geno_sex, sex_ratio_y_l, year) %>%
+  summarise(mean_tlf = mean(tlf), sd_tlf = sd(tlf))
+
+ggplot(data = below_tlf_means)+geom_point(aes(sex_ratio_y_l, mean_tlf, color = geno_sex ))+geom_smooth(aes(sex_ratio_y_l, mean_tlf, color = geno_sex ), method = "lm")
+```
+
+```{r}
+below_glmm <- glmmTMB(tlf ~  geno_sex  + sex_ratio_y_l , data = mm_data_below, family=nbinom2)
+summary(below_glmm)
+drop1(below_glmm, test = "Chisq")
+plot(predictorEffect("sex_ratio_y_l", below_glmm), main = "GLM: TLF ~ sex + annual sex ratio\nNOR Below Big Cliff",  axes=list(x=list(sex_ratio_y_l=list(lab="Log Sex ratio (males / females)"))))
+simulateResiduals(below_glmm, plot = TRUE)
+```
+
+### include 2016
+
+```{r}
+mm_data <-  parents %>%
+  filter(type %in% c("outplant", "reintro_above"), year <2017) %>%
+  select(date, geno_sex, location, tlf, year) %>%
+
+  mutate(jday = as.numeric(format(date, "%j"))) %>% #julian day in this case: days since the first day of the year
+  mutate(location = case_when(location == "dry cr" ~ "dry creek",
+                              TRUE ~ as.character(location))) %>%
+  mutate(location = as.factor(location)) %>%
+  mutate(jday_c = scale(jday, scale = F),#center the julian day to help with convergence
+         geno_sex = as.factor(geno_sex),
+         location = as.factor(location),
+         year = as.factor(year),
+         group = as.factor(paste(date, location)))
+
+
+# lets add density
+dens <- mm_data %>%
+ group_by(jday, location, year) %>%
+  summarise(density = n())
+
+mm_data %<>%
+  left_join(dens)
+
+# lets add overall size of release in a year
+dens <- mm_data %>%
+ group_by( year) %>%
+  summarise(annual_n = n())
+
+mm_data %<>%
+  left_join(dens)
+
+
+# lets add sex ratio
+#build release group sex ratio variable
+f <- mm_data %>% 
+  filter(geno_sex == "F") %>%
+  group_by(location, jday, year) %>% 
+  summarise(n_female_rg = n()) 
+
+mm_data %<>%
+  left_join(f)
+
+m <- mm_data %>% 
+  filter(geno_sex == "M") %>%
+  group_by(location, jday, year) %>% 
+  summarise(n_male_rg = n()) 
+
+mm_data %<>%
+  left_join(m) %>%
+  mutate(sex_ratio_rg = n_male_rg/n_female_rg)
+
+# maybe the release groups all mix thoroughly spawn together and we should fit sex ratio at the level of year
+f <- mm_data %>% 
+  filter(geno_sex == "F") %>%
+  group_by( year) %>% 
+  summarise(n_female_y = n()) 
+
+mm_data %<>%
+  left_join(f)
+
+m <- mm_data %>% 
+  filter(geno_sex == "M") %>%
+  group_by( year) %>% 
+  summarise(n_male_y = n()) 
+
+mm_data %<>%
+  left_join(m) %>%
+  mutate(sex_ratio_y = n_male_y/n_female_y)
+
+
+mm_data %<>%
+  mutate(sex_ratio_rg_l = log(sex_ratio_rg),
+         sex_ratio_y_l = log(sex_ratio_y))
+
+
+
+```
+```{r}
+mm_data %<>%
+  select(-c(jday, jday_c))
+
+mm_data %<>%
+  select(-date)
+
+mm_data %<>%
+  drop_na()
+mm_beyond_opt <- glmmTMB(tlf ~  geno_sex  +  poly(density,2)+ annual_n + geno_sex*poly(density,2)+poly(sex_ratio_y_l,2)+ poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_rg_l,2) + geno_sex*poly(sex_ratio_y_l,2) + (1|group) + (1|year), data = mm_data, family = nbinom2)
+
+summary(mm_beyond_opt)
+```
 # Effective Number of Breeders
 
 Calculated Nb using LD method from NeEstimator v2.1. Used GUI, so only logging the parameters used here, not calculating the values.
@@ -2862,6 +3045,10 @@ gts_off_of_2015 %<>%
 
 
 ```
+
+## Combined Above
+
+Since the outplants and reintros above the dam seem to be freely spawning together. We should really estimate Nb for these groups together.
 
 ## Results
 
