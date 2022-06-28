@@ -17,3 +17,12 @@ dplyr
 stringr
 forcats
 magrittr
+carData
+car
+glmmTMB
+countreg
+lmerTest
+zoo
+lmtest
+emmeans
+effects

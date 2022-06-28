@@ -1,0 +1,20 @@
+Output from NeEstimator v2.1
+Starting time: Mon Jun 27 16:44:27 2022
+Input File: "genepop_2013.txt"
+
+Number of Loci = 12
+
+
+Mating Model: Random
+
+Lowest allele frequency used:    0.0200
+Up to 17 righmost characters can be shown for population names.
+-------------------------------------------------------------------------------------------------------------------------
+Population #   Samp  Weighted      #Indep.   r^2     Exp(r^2)       Ne^                 CIs for Ne^
+then by :Name  Size  H. Mean       Alleles            Sample                    Parametric       Jackknife Samp  (Eff.df)
+-------------------------------------------------------------------------------------------------------------------------
+1:6NSNT_1006   242    240.2       10161  0.005692  0.004218      224.1     201.9     250.3     179.3     289.8      2064
+
+Ending time: Mon Jun 27 16:44:27 2022
+-------------------------------------
+

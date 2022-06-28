@@ -338,13 +338,17 @@ parents %>%
 We should probably build a more complex model here, but for now let's do a one-liner analysis to see if 2015 reintros above did significantly better than reintros below or outplants above.
 
 ```{r}
+abv_data <- filter(parents, year == 2015, type %in% c("outplant", "reintro_above", "reintro")) %>%
+  mutate(type = fct_relevel(type, c("reintro_above", "reintro", "outplant")))
 
-above_glm <- glm.nb(tlf ~  type, data = filter(parents, year == 2015, type %in% c("outplant", "reintro_above", "reintro")) )
+above_glm <- glm.nb(tlf ~  geno_sex + type, data = abv_data )
 summary(above_glm)
 rootogram(above_glm)
 emmeans( above_glm, "type", type = "response")
 plot(emmeans( above_glm, "type", type = "response"))
 #TukeyHSD(aov(data = filter(parents, year == 2015, type %in% c("outplant", "reintro_above", "reintro")), tlf ~ type))
+
+ggplot(data = as.data.frame(emmeans( above_glm, "type", type = "response")), aes(x = type, y = response, ymin = response-SE, ymax = response+SE)) + geom_pointrange()+theme_classic()+scale_x_discrete(labels = c("Reintroduced Above\nDetroit", "Reintroduced Below\nBig Cliff", "Outplanted Above\nDetroit"), name = "Type")+ylab("Estimated TLF")
 ```
 
 Type is a significant predictor of fitness. 
@@ -1757,7 +1761,7 @@ ggplot(data = eff_sr_df, aes(x = (sex_ratio), y = fit))+
   geom_smooth( aes(ymin = lower, ymax = upper), stat = "identity") +
   theme_bw()+ylab("TLF") +
   geom_rug(data = glm_2013_data, aes(x = sex_ratio_rg, y = NULL, color = NULL)) + 
-  geom_point(data = actual_means, aes(x = sex_ratio_rg, y = mean_tlf), alpha = 0.8, shape = 24, size = 2)+ggtitle("2013 Predictors of Fitness - Release Group Sex Ratio")
+  geom_point(data = actual_means, aes(x = sex_ratio_rg, y = mean_tlf), alpha = 0.8, shape = 24, size = 2)+ggtitle("2013 Predictors of Fitness - Release Group Sex Ratio")+ylim(0, 1.5)
   
 
 #density
@@ -1776,7 +1780,7 @@ ggplot(data = eff_d_df, aes(x = (density), y = fit))+
   theme_bw()+ylab("TLF") +
   geom_point(data = actual_means, aes(x = density, y = mean_tlf), alpha = 0.8, shape = 24, size = 2) +
   geom_rug(data = glm_2013_data, aes(x = density, y = NULL, color = NULL)) +
-  ggtitle("2013 Predictors of Fitness - Density")
+  ggtitle("2013 Predictors of Fitness - Density")+ylim(0, 1.5)
   
 
 #day
@@ -1795,7 +1799,7 @@ ggplot(data = eff_j_df, aes(x = (jday), y = fit))+
   theme_bw()+ylab("TLF") +
   geom_point(data = actual_means, aes(x = jday, y = mean_tlf), alpha = 0.8, shape = 24, size = 2) + 
   geom_rug(data = glm_2013_data, aes(x = jday, y = NULL, color = NULL)) + 
-  ggtitle("2013 Predictors of Fitness - Release Day")
+  ggtitle("2013 Predictors of Fitness - Release Day")+ylim(0, 1.5)
 ```
 
 
@@ -2120,7 +2124,7 @@ ggplot(data = pe_j_2015, aes(x = (jday), y = fit))+
   geom_smooth( aes(ymin = lower, ymax = upper), stat = "identity") +
   theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 3)) +
   geom_rug(data = glm_2015_data, aes(x = jday, y = NULL)) + 
-  geom_point(data = actual_means, aes(x = jday, y = mean_tlf), alpha = 0.8, shape = 24, size = 2)+ggtitle("2015 Predictors of Fitness - Release Day")
+  geom_point(data = actual_means, aes(x = jday, y = mean_tlf), alpha = 0.8, shape = 24, size = 2)+ggtitle("2015 Predictors of Fitness - Release Day")+ylim(0,3)
   
 
 eff1 <- predictorEffect("density", M2015_NB8)
@@ -2135,7 +2139,7 @@ ggplot(data = effdf, aes(x = (density), y = fit, color = geno_sex))+
   geom_line() +
   xlab("Density") +
   geom_smooth( aes(ymin = lower, ymax = upper, fill = geno_sex, colour = geno_sex), stat = "identity") +
-  theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 2)) + scale_color_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) + scale_fill_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) +
+  theme_bw()+ylab("TLF")+coord_cartesian(ylim = c(0, 3)) + scale_color_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) + scale_fill_manual(labels = c("Female", "Male"), name = "Sex", values = c("#228833", "#AA3377")) +
   geom_rug(data = glm_2015_data, aes(x = density, y = NULL, color = NULL))+ggtitle("2015 Predictors of Fitness - Sex * Density Interaction")
 
 # sex ratio
@@ -2632,12 +2636,50 @@ ggplot(data = below_tlf_means)+geom_point(aes(sex_ratio_y_l, mean_tlf, color = g
 ```
 
 ```{r}
+below_glmm <- glmmTMB(tlf ~  geno_sex  + sex_ratio_y_l+ sex_ratio_y_l*geno_sex , data = mm_data_below, family=nbinom2)
+summary(below_glmm)
+drop1(below_glmm, test = "Chisq")
+
+#interaction not significant, remove and refit
 below_glmm <- glmmTMB(tlf ~  geno_sex  + sex_ratio_y_l , data = mm_data_below, family=nbinom2)
 summary(below_glmm)
 drop1(below_glmm, test = "Chisq")
 plot(predictorEffect("sex_ratio_y_l", below_glmm), main = "GLM: TLF ~ sex + annual sex ratio\nNOR Below Big Cliff",  axes=list(x=list(sex_ratio_y_l=list(lab="Log Sex ratio (males / females)"))))
 simulateResiduals(below_glmm, plot = TRUE)
+
+effdf <- as.data.frame(predictorEffect("sex_ratio_y_l", below_glmm), main = "GLM: TLF ~ sex + annual sex ratio\nNOR Below Big Cliff",  axes=list(x=list(sex_ratio_y_l=list(lab="Log Sex ratio (males / females)"))))
+effdf %<>%
+  mutate(sex_ratio_y = exp(sex_ratio_y_l))
+
+below_tlf_means2 <- mm_data_below %>%
+  group_by( sex_ratio_y_l, year) %>%
+  summarise(mean_tlf = mean(tlf), sd_tlf = sd(tlf))
+
+
+ggplot(data = effdf, aes(x = (sex_ratio_y), y = fit)) + geom_line()+scale_x_continuous(trans = "log", n.breaks = 10) +
+  xlab( bquote(atop("Sex Ratio",(N[male]/N[female])))) +
+  geom_smooth( aes(ymin = lower, ymax = upper), stat = "identity") +
+  theme_bw()+ylab("Fitness") + 
+  geom_rug(data = below_tlf_means2, aes(x = exp(sex_ratio_y_l), y = NULL))
+  
+  #geom_point(data = below_tlf_means2, aes(x = exp(sex_ratio_y_l), y = mean_tlf), alpha = 0.8, shape = 24, size = 2)
+  
 ```
+
+Similar effect both above and below Detroit. Is this due to other variables nested within year? Let's check if sex ratios were correlated?
+
+```{r}
+a <- mm_data %>% count(sex_ratio_y, year)
+b <- mm_data_below %>% count(sex_ratio_y, year) 
+
+cor <- bind_rows(a,b, .id = "above_below") %>%
+  mutate(above_below = case_when(above_below == "1" ~ "above",
+                                 above_below == "2" ~ "below"))
+
+ggplot(data = cor)+geom_point(aes(x = year, y = sex_ratio_y, color = above_below))
+```
+
+Nope looks good.
 
 ### include 2016
 
@@ -2732,12 +2774,13 @@ mm_beyond_opt <- glmmTMB(tlf ~  geno_sex  +  poly(density,2)+ annual_n + geno_se
 
 summary(mm_beyond_opt)
 ```
+
 # Effective Number of Breeders
 
 Calculated Nb using LD method from NeEstimator v2.1. Used GUI, so only logging the parameters used here, not calculating the values.
 
 Parameters:  
-MAF: 0.02  
+S+ option (exclude singletons)  
 CIs: 95% confidence intervals from jacknife re-sampling method  
 Data: Data for a given year is the assigned offspring of that year  
 
@@ -3066,6 +3109,8 @@ nb <- meta_data %>%
   right_join(nb) %>%
   rename(n_candidate_parents = n)
 
+
+
 # get basic counts of successful parents (candidate parents in row with at least one offspring)
 
 # kable(pedigree_meta %>%
@@ -3198,7 +3243,7 @@ gts_off_of_2015 %<>%
 
 ```
 
-For the 2015 above Detroit parent cohort (ignoring carcasses to be consistent with the table as presented earlier), the number of offspring in the dataset was 717, Nb was 332.1 (291.6 - 380.6). Here we see that when considered all of the successful parents above Detroit together, the Nb results are not so problematic. The ratio of Nb to number of successful parents is a more reasonable ~69% (compared to 95% for outplants and 92% for reintros). 
+For the 2015 above Detroit parent cohort (ignoring carcasses to be consistent with the table as presented earlier), the number of offspring in the dataset was 717, Nb was 370.4 (321.6 - 430.2). Here we see that when considered all of the successful parents above Detroit together, the Nb results are not so problematic. The ratio of Nb to number of successful parents is a more reasonable ~78% (compared to 95% for outplants and 92% for reintros). 
 
 
 # Appendix

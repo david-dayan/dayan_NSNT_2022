@@ -26,7 +26,13 @@ For each offspring year, assign parentage using two programs: _Cervus_ and _Colo
 
 This is an R notebook. The .html version of this file is a fully rendered and interactive log. To view it, save the html and open in a browse. The .rmd version can be opened within R studio. To reproduce results or edit the analysis: clone the full repository onto tyour local machine and open the r project in rstudio. This will provide all needed data and objects. 
 
+# Rationale
 
+I (Dayan) could not successfully reproduce previous years assignment results. While the overall assignment rates were similar, there were always small differences due to the reliance on manual assignments of edge cases. The previous worker (Bohn) also attempted to exactly reproduce the approach taken by the worker before them (Black), but there was no way to consistently reproduce results given unspecified aspects of the assignment criteria and the reliance of manual assignments.
+
+To solve the reproducibility problems and to make work easier for future analyzes or similar analyses on different systems, I chose to reassign all offspring from 2016 - 2020 using new assignment criteria. I also reassigned 2014 and 2015 offspring to 2011 and 2012 parents, as these parent years were salient to the report and we would like all results presented in the report to be calculated consistently, but note that these offspring years are not assigned to all possible parents. 
+
+I attempted to preserve as much work as possible and draft new assignment criteria as close as possible to previously published approaches from either this system (North Santiam) or other Upper Willamette River Chinook Salmon pedigree projects (McKenzie River). All individuals and their genotypes previously used by Bohn are retained in this new analysis.
 
 # Data Summary
 

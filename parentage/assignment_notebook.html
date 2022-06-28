@@ -3100,6 +3100,12 @@ require(magrittr)</code></pre>
 <p>For each offspring year, assign parentage using two programs: <em>Cervus</em> and <em>Colony</em>. Then create a consensus pedigree between the two programs. Finally, combine offspring years into a final pedigree used for downstream analysis.</p>
 <p>This is an R notebook. The .html version of this file is a fully rendered and interactive log. To view it, save the html and open in a browse. The .rmd version can be opened within R studio. To reproduce results or edit the analysis: clone the full repository onto tyour local machine and open the r project in rstudio. This will provide all needed data and objects.</p>
 </div>
+<div id="rationale" class="section level1">
+<h1>Rationale</h1>
+<p>I (Dayan) could not successfully reproduce previous years assignment results. While the overall assignment rates were similar, there were always small differences due to the reliance on manual assignments of edge cases. The previous worker (Bohn) also attempted to exactly reproduce the approach taken by the worker before them (Black), but there was no way to consistently reproduce results given unspecified aspects of the assignment criteria and the reliance of manual assignments.</p>
+<p>To solve the reproducibility problems and to make work easier for future analyzes or similar analyses on different systems, I chose to reassign all offspring from 2016 - 2020 using new assignment criteria. I also reassigned 2014 and 2015 offspring to 2011 and 2012 parents, as these parent years were salient to the report and we would like all results presented in the report to be calculated consistently, but note that these offspring years are not assigned to all possible parents.</p>
+<p>I attempted to preserve as much work as possible and draft new assignment criteria as close as possible to previously published approaches from either this system (North Santiam) or other Upper Willamette River Chinook Salmon pedigree projects (McKenzie River). All individuals and their genotypes previously used by Bohn are retained in this new analysis.</p>
+</div>
 <div id="data-summary" class="section level1">
 <h1>Data Summary</h1>
 <p>Input data is available in the directory “parentage_data”</p>
@@ -3122,7 +3128,7 @@ require(magrittr)</code></pre>
 </div>
 <div id="prepare-input-data" class="section level1">
 <h1>Prepare Input Data</h1>
-<div id="rationale" class="section level2">
+<div id="rationale-1" class="section level2">
 <h2>Rationale</h2>
 <p>Previous files for 2016 - 2019 are ready to use for <em>Cervus</em> and <em>Colony</em>, but there is no unified sample naming scheme across years. For example the same individual is named “NS-OP_12_0011” and “NS_12_OP_HOR_M_0011” in the input files for 2017 and 2016 respectively.</p>
 <p>This will wreak havoc with downstream analyses, because there will be no way to readily unify results across offspring years, a step critical for calculation of any statistic calculated for parents, such as total lifetime fitness.</p>

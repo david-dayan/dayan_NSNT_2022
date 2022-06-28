@@ -1,34 +1,36 @@
 Output from NeEstimator v2.1
-Starting time: Fri Apr 15 13:14:58 2022
+Starting time: Mon Jun 27 16:53:50 2022
 Input File: "genepop_2015.txt"
 
 Number of Loci = 12
 
 LD mating model: Random
 
+(Symbol "No S*" in Frequency means that NO Singleton Alleles are accepted.)
+
 Population     1 [AC20NSNT_0144]  (Number of Individuals = 83)
 ****************
---------------------------------------------------------------
-Lowest Allele Frequency Used     0.050       0.020       0.010  
---------------------------------------------------------------
+--------------------------------------------------
+Lowest Allele Frequency Used     0.020       No S*  
+--------------------------------------------------
 
 LINKAGE DISEQUILIBRIUM METHOD
 
-Harmonic Mean Sample Size =       81.0        81.3        81.1
-Independent Comparisons =       2939        7893       15421
-OverAll r^2 =                 0.018128    0.017405    0.016856
-Expected r^2 Sample =         0.012825    0.012775    0.012803
-Estimated Ne^ =                   60.7        69.9        80.1
+Harmonic Mean Sample Size =       81.3        81.1
+Independent Comparisons =       7893       15421
+OverAll r^2 =                 0.017405    0.016856
+Expected r^2 Sample =         0.012775    0.012803
+Estimated Ne^ =                   69.9        80.1
 
 95% CIs for Ne^
-* Parametric                      51.0        62.1        73.0
-                                  73.4        79.2        88.4
+* Parametric                      62.1        73.0
+                                  79.2        88.4
 
-* JackKnife on Samples            34.7        51.3        56.8
-                                 133.9       101.3       123.5
+* JackKnife on Samples            51.3        56.8
+                                 101.3       123.5
 
-**************************************************************
+**************************************************
 
-Ending time: Fri Apr 15 13:14:58 2022
+Ending time: Mon Jun 27 16:53:51 2022
 -------------------------------------
 
